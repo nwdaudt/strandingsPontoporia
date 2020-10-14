@@ -15,7 +15,7 @@ pontoporia = readxl::read_xlsx("./Pontoporia PMP 2015_08_24 a
 pontoporia <- 
   pontoporia %>% 
   select(Código, `Data/Hora`, `Ponto - Lat`, `Ponto - Long`)
-
+###
 names(pontoporia) <- c("cod", "date_hour", "lat", "long")
 
 ## transform dataframe into a geospatial feature:
