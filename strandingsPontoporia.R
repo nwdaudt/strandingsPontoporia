@@ -1,69 +1,131 @@
-# Code for consultancy of Pontoporia strandings
+## Code for: 
+## Fransiscana dolphin 'Pontoporia blainvillei' strandings in 
+## southeast-south Brazil, Fransiscana Management Area (FMA) II, 
+## between 2015-2020
+## 
+## Code by Jonatas H F do Prado, Jessica L Schattschneider, Nicholas W Daudt
+## 
+
+### General tidy rules - - - - - 
+# variable_names <- write with lower case and underlines
+# dataframeNames <- cammelCase style (startLowerCaseAndEveryNewWorldStartWithCapital)
+# package::function notation, unless from 'base' packages
+# Sessions delimited by "# Session name ####"
+# Every step within the Session, use ## and a quick comment
+###- - - - - - - - - - - - - - - 
+
+# rm(list = ls())
 
 # Libraries ####
-library(mgcv)
 library(tidyverse)
 library(mapview)
 library(sf)
 library(ecmwfr)
 library(ncdf4)
 library(reticulate)
+# library(mgcv)
 
-# Open file and visualize ###
-# rm(list = ls())
-setwd("C:/Users/jessicas/Documents/strandingsPontoporia/")
+# Open files and visualize ####
 
-## open pontoporia dataset:
-pontoporia <- readxl::read_xlsx("./Pontoporia PMP 2015_08_24 a 2020_06_11 SC_PR_SP_RJ.xlsx", sheet = 2)
-# filter columns
+# setwd("C:/Users/jessicas/Documents/strandingsPontoporia/")
+# Lembrando, Jony - se tens um "projeto", o setwd ta automatico pra ti...
+
+## Open Pontoporia dataset
+pontoporia <- as.data.frame(
+  readxl::read_xlsx("./Pontoporia PMP 2015_08_24 a 2020_06_11 SC_PR_SP_RJ.xlsx", 
+                    sheet = 2))
+
+## Filter columns
 pontoporia <- 
   pontoporia %>% 
-  select(Código, `Data/Hora`, `Condição da carcaça` ,`Ponto - Lat`, `Ponto - Long`)
-#Rename columns
-names(pontoporia) <- c("id", "date_hour", "cod_carcaca", "lat", "long")
-## transform dataframe into a geospatial feature
-pontoporia.sp <- st_as_sf(pontoporia, coords = c("long", "lat"), crs = 4326)
-pontoporia.mapview <- mapview(pontoporia.sp, cex = 0.2) #add visualization into a df
+  dplyr::select(Código, `Identificador do indivíduo`, Estado, Praia, Trecho, 
+         `Estratégia do trecho`, `Tipo do monitoramento`, `Data/Hora`, 
+         `Ponto - Lat`, `Ponto - Long`, `Condição da carcaça`, `OFAI - Sexo`)
 
-## open drift dataset:
-drift <- read.csv("./woodDrift.csv")
-# transform dataframe into a geospatial feature
-drift.sp <- st_as_sf(drift, coords = c("Y", "X"), crs = 4326)
-drift.mapview <- mapview(drift.sp, zcol = "ï..Campanha" ) #add visualization into a df
+## Rename columns and levels
+names(pontoporia) <- c("id", "id_individual", "state", "beach",
+                       "strech_name", "strech_scheme", "monitoring_type",
+                       "date_hour", "lat", "long", "cod_decomposition", "sex")
 
-## open isobath dataset:
-isobath <- st_read("./linhasbatimetricas/linhas_lim_200m.shp")
-isobath.mapview <- mapview(filter(isobath, ELEV==50)) #add visualization into a df
+pontoporia$strech_scheme <- as.factor(pontoporia$strech_scheme)
+levels(pontoporia$strech_scheme) <- list(daily = "Diário", 
+                                         weekly = "Semanal", 
+                                         fortnightly = "Diário 15", 
+                                         call = "Acionamento")
 
-## visualize all 
-drift.mapview + isobath.mapview + pontoporia.mapview
+pontoporia$monitoring_type <- as.factor(pontoporia$monitoring_type)
+levels(pontoporia$monitoring_type) <- list(regular = "Regular", 
+                                           call = "Acionamento")
 
-## import monitored beach segments:
-## 01 - OPEN DATA AND MERGE ALL SHAPEFILES INTO ONE ####
-# create a list with all subdirectories containing the shapefiles:
-ff <- as.list(list.files(path=".", pattern="linha.shp$", recursive=TRUE, full.names=TRUE))
+pontoporia$sex <- as.factor(pontoporia$sex)
+levels(pontoporia$sex) <- list(female = "Fêmea", 
+                               male = "Macho", 
+                               unkwown = "Indefinido")
 
-## Function to open the shps in subdirectories
+## Transform df into a geospatial feature
+pontoporiaSpatial <- sf::st_as_sf(pontoporia, coords = c("long", "lat"), crs = 4326)
+
+pontoporiaMapview <- # Run this line to add visualization into a df
+  mapview::mapview(pontoporiaSpatial, cex = 0.2)
+
+## Open drift_experiment dataset
+drift <- as.data.frame(
+  readr::read_csv("./drift_experiment.csv", col_names = TRUE))
+
+## Transform dataframe into a geospatial feature
+# Need to remove observations with 'NA' in lat/long
+driftSpatial <- 
+  drift %>% 
+  dplyr::filter(lat != is.na(lat)) %>% 
+  sf::st_as_sf(coords = c("long", "lat"), crs = 4326)
+
+driftReleaseStations <- 
+  driftSpatial %>% 
+  dplyr::filter(id_data == "release")
+
+driftReleaseStationsMapview <- # Run this line to add visualization into a df
+  mapview::mapview(driftReleaseStations, zcol = "campaign" )
+
+## Open isobath dataset
+isobath <- sf::st_read("./linhasbatimetricas/linhas_lim_200m.shp")
+
+isobath50Mapview <- # Run this line to add visualization into a df
+  mapview::mapview(dplyr::filter(isobath, ELEV == 50))
+
+## Visualize them all
+driftReleaseStationsMapview + isobath50Mapview + pontoporiaMapview
+
+# Monitored beach segments - OPEN DATA AND MERGE ALL SHAPEFILES INTO ONE ####
+
+## Create a list with all sub-directories containing the shapefiles:
+ff <- as.list(list.files(path = ".", 
+                         pattern = "linha.shp$", 
+                         recursive = TRUE, 
+                         full.names = TRUE))
+
+## Function to open the shps in sub-directories
 open_shp <- function(ff){
-  linha <- read_sf(ff[i])
+  linha <- sf::read_sf(ff[i])
   linha
 }
 
-## A looping creating a list with all shapefiles
+## A loop creating a list with all shapefiles
 linhas <- list()
 for (i in 1:length(ff)) {
   linhas[[i]] <- open_shp(ff)
 }
 
-# Merge all monitoring lines in one shapefile
-merged.lines <- do.call(rbind, linhas)
-# visualize beach segments
-mapview(filter(merged.lines, beach_name != "Praia não identificada"))
+## Merge all monitoring lines in one shapefile
+mergedLines <- do.call(rbind, linhas)
+
+## Visualize beach segments
+mapview::mapview(filter(mergedLines, beach_name != "Praia não identificada"))
 
 
-####### Starting data collection from ERA5: ###########
-# check for unique ids:
-pontoporia %>% group_by(id) %>% count()
+# Starting data collection from ERA5: ####
+
+## Check for unique ids:
+pontoporia %>% dplyr::group_by(id) %>% count()
 
 ## start downloading data:
 
@@ -71,22 +133,24 @@ wf_set_key("user" = "jessica.leiria@gmail.com",
   "key" = "afc55855c5156df018fa0173630fe672",
   "service" = "webapi")
 
-request <- list("dataset_short_name" = "reanalysis-era5-pressure-levels",
-                "product_type"   = "reanalysis",
-                "variable"       = "temperature",
-                "pressure_level" = "850",
-                "year"           = "2000",
-                "month"          = "04",
-                "day"            = "04",
-                "time"           = "00:00",
-                "area"           = "70/-20/30/60",
-                "format"         = "netcdf",
+request <- list("dataset_short_name" = "reanalysis-era5-pressure-levels", 
+                "product_type"   = "reanalysis", 
+                "variable"       = "temperature", 
+                "pressure_level" = "850", 
+                "year"           = "2000", 
+                "month"          = "04", 
+                "day"            = "04", 
+                "time"           = "00:00", 
+                "area"           = "70/-20/30/60", 
+                "format"         = "netcdf", 
                 "target"         = "era5-demo.nc")
 
-# Start downloading the data, the path of the file
+## Start downloading the data, the path of the file
 # will be returned as a variable (ncfile)
-ncfile <- wf_request(user = "2088",
-                     request = request,   
-                     transfer = TRUE,  
-                     path = "~",
+ncfile <- wf_request(user = "2088", 
+                     request = request, 
+                     transfer = TRUE, 
+                     path = "~", 
                      verbose = FALSE)
+
+#################
