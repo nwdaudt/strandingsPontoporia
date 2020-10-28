@@ -33,7 +33,7 @@ library(reticulate)
 # Lembrando, Jony - se tens um "projeto", o setwd ta automatico pra ti...
 
 #
-### Open Pontoporia dataset
+## Open Pontoporia dataset
 pontoporia <- as.data.frame(
   readxl::read_xlsx("./Pontoporia PMP 2015_08_24 a 2020_06_11 SC_PR_SP_RJ.xlsx", 
                     sheet = 2))
@@ -70,11 +70,11 @@ pontoporiaSpatial <-
   sf::st_as_sf(pontoporia, coords = c("long", "lat"), crs = 4326)
 
 #
-### Open drift_experiment dataset
+## Open drift_experiment dataset
 drift <- utils::read.csv("./drift_experiment_data.csv", sep=";")
 
 ## Transform dataframe into a geospatial feature
-# Need to remove observations with NA in "lat/long" and "id"
+# Remove observations with NA in "lat/long" and "id"
 # Create an "id_distance" for calculate time between Release and Stranding
 driftSpatial <- 
   drift %>% 
@@ -88,21 +88,21 @@ driftSpatial$campaign <- as.factor(driftSpatial$campaign)
 driftSpatial$id_distance <- as.factor(driftSpatial$id_distance)
 
 #
-### Open isobath dataset
+## Open isobath dataset
 isobath <- sf::st_read("./linhasbatimetricas/linhas_lim_200m.shp")
 
-# Initial visualizations -- strandings, drifts ####
+# Mapview -- quick spatial check on strandings and drifts ####
 
-# Mapview Pontoporia strandings
+## Mapview Pontoporia strandings
 pontoporiaMapview <- # Run this line to add visualization into a df
   mapview::mapview(pontoporiaSpatial, cex = 0.2)
 
-# Mapview Release Stations from drift experiment
+## Mapview Release Stations from drift experiment
 driftReleaseStationsMapview <- # Run this line to add visualization into a df
   mapview::mapview(dplyr::filter(driftSpatial, id_data == "release"), 
                    zcol = "campaign")
 
-# Mapview isobath 50m
+## Mapview isobath 50m
 isobath50Mapview <- # Run this line to add visualization into a df
   mapview::mapview(dplyr::filter(isobath, ELEV == 50))
 
@@ -123,6 +123,7 @@ vectorRelease <- as.character(vectorRelease[['id_distance']])
 
 vectorStranding <- as.character(as.factor(stringr::str_replace(as.character(vectorRelease), "R", "S")))
 
+#
 ## Calculate the distance between release and stranding location
 driftDist <- list()
 
@@ -134,7 +135,8 @@ for(i in 1:27)
 
 mean(driftDist[[i]]); sd(driftDist[[i]]); min(driftDist[[i]]); max(driftDist[[i]])
 
-# Duration between release and stranding
+#
+## Duration between release and stranding
 driftTime <- list()
 
 for(i in 1:27)
@@ -144,8 +146,9 @@ for(i in 1:27)
 
 mean(driftTime[[i]]); sd(driftTime[[i]]); min(driftTime[[i]]); max(driftTime[[i]])
 
-# Considering distance between stranding and release position 
-# for drifting time less than 10 days
+#
+## Considering distance between stranding and release position 
+## for drifting time less than 10 days
 
 
 # Monitored beach segments - OPEN DATA AND MERGE ALL SHAPEFILES INTO ONE ####
@@ -177,10 +180,10 @@ mapview::mapview(filter(mergedLines, beach_name != "Praia não identificada"))
 
 # Starting data collection from ERA5: ####
 
-## Check for unique ids:
+## Check for unique ids
 pontoporia %>% dplyr::group_by(id) %>% count()
 
-## start downloading data:
+## Start downloading data
 
 wf_set_key("user" = "jessica.leiria@gmail.com",
   "key" = "afc55855c5156df018fa0173630fe672",
@@ -198,8 +201,8 @@ request <- list("dataset_short_name" = "reanalysis-era5-pressure-levels",
                 "format"         = "netcdf", 
                 "target"         = "era5-demo.nc")
 
-## Start downloading the data, the path of the file
-# will be returned as a variable (ncfile)
+## Start downloading data
+# The path of the file will be returned as a variable (ncfile)
 ncfile <- wf_request(user = "2088", 
                      request = request, 
                      transfer = TRUE, 
