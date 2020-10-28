@@ -30,7 +30,6 @@ library(reticulate)
 # Open files and visualize ####
 
 # setwd("C:/Users/jessicas/Documents/strandingsPontoporia/")
-# Lembrando, Jony - se tens um "projeto", o setwd ta automatico pra ti...
 
 #
 ## Open Pontoporia dataset
@@ -73,19 +72,14 @@ pontoporiaSpatial <-
 ## Open drift_experiment dataset
 drift <- utils::read.csv("./drift_experiment_data.csv", sep=";")
 
-## Transform dataframe into a geospatial feature
-# Remove observations with NA in "lat/long" and "id"
-# Create an "id_distance" for calculate time between Release and Stranding
-driftSpatial <- 
+## Filter and set up Date columns
+drift <- 
   drift %>% 
-  dplyr::filter(lat != is.na(lat)) %>% 
-  dplyr::filter(id != is.na(id)) %>%
-  dplyr::mutate(id_distance = paste(campaign, id, release_stranding)) %>%
-  sf::st_as_sf(coords = c("long", "lat"), crs = 4326)
-
-driftSpatial$date <- lubridate::dmy(driftSpatial$date)
-driftSpatial$campaign <- as.factor(driftSpatial$campaign)
-driftSpatial$id_distance <- as.factor(driftSpatial$id_distance)
+  dplyr::filter(lat_s != is.na(lat_s)) %>% 
+  dplyr::filter(date_s != is.na(date_s))
+  
+drift$date_r <- lubridate::dmy(drift$date_r)
+drift$date_s <- lubridate::dmy(drift$date_s)
 
 #
 ## Open isobath dataset
@@ -111,45 +105,95 @@ driftReleaseStationsMapview + isobath50Mapview + pontoporiaMapview
 
 # Drift experiment - Mean distance & time between release and strandings ####
 
-## Create 'release' and 'strandings' vectors to use as basis for calculations
-vectorRelease <- 
-  driftSpatial %>% 
-  as.data.frame() %>% 
-  dplyr::select(id_distance) %>% 
-  dplyr::filter(stringr::str_detect(id_distance, "R$")) %>% 
-  droplevels()
+## Create a link to calculate time and distances, 
+## between (r)elease and (s)tranding
+driftSpatial_r <- 
+  drift %>% 
+  dplyr::select(campaign,id,(ends_with("r"))) %>% 
+  sf::st_as_sf(coords = c("long_r", "lat_r"), crs = 4326)
 
-vectorRelease <- as.character(vectorRelease[['id_distance']])
+driftSpatial_s <- 
+  drift %>% 
+  dplyr::select(campaign,id,(ends_with("s"))) %>% 
+  sf::st_as_sf(coords = c("long_s", "lat_s"), crs = 4326)
 
-vectorStranding <- as.character(as.factor(stringr::str_replace(as.character(vectorRelease), "R", "S")))
-
-#
-## Calculate the distance between release and stranding location
-driftDist <- list()
-
-for(i in 1:27)
-  driftDist[[i]] <- 
-  sf::st_distance(driftSpatial$geometry[driftSpatial$id_distance == vectorRelease[i]], 
-                  driftSpatial$geometry[driftSpatial$id_distance == vectorStranding[i]], 
-                  by_element = FALSE)
-
-mean(driftDist[[i]]); sd(driftDist[[i]]); min(driftDist[[i]]); max(driftDist[[i]])
-
-#
-## Duration between release and stranding
-driftTime <- list()
-
-for(i in 1:27)
-  driftTime[[i]] <- 
-  (driftSpatial$date[driftSpatial$id_distance == vectorRelease[i]]) -
-  (driftSpatial$date[driftSpatial$id_distance == vectorStranding[i]])
-
-mean(driftTime[[i]]); sd(driftTime[[i]]); min(driftTime[[i]]); max(driftTime[[i]])
+## Calculate distance and time between 'r' and 's'
+driftDistTime <- 
+  drift %>% 
+  dplyr::select(campaign, id, state, 
+                date_r, date_s, 
+                lat_r, long_r, 
+                lat_s, long_s) %>% 
+  mutate(dist = sf::st_distance(
+    driftSpatial_r$geometry, driftSpatial_s$geometry, by_element = T)) %>% 
+  mutate(time_lag = (date_s) - (date_r))
 
 #
-## Considering distance between stranding and release position 
-## for drifting time less than 10 days
+## Summaries
 
+driftSummary_ID_Campaign <- 
+  driftDistTime %>% 
+  group_by(campaign, id) %>% 
+  dplyr::summarise(n = n(),
+                   n_percentage = round(((n()/33)*100), digits = 1),
+                   meanDist = mean((as.numeric(dist)/1000)),
+                   sdDist = sd((as.numeric(dist)/1000)),
+                   minDist = min((as.numeric(dist)/1000)),
+                   maxDist = max((as.numeric(dist)/1000)),
+                   meanTime = mean(as.numeric(time_lag)),
+                   sdTime = sd(as.numeric(time_lag)),
+                   minTime = min(as.numeric(time_lag)),
+                   maxTime = max(as.numeric(time_lag)))
+
+driftSummary_State <- 
+  driftDistTime %>% 
+  group_by(state) %>% 
+  dplyr::summarise(n = n(),
+                   n_percentage = round(((n()/297)*100), digits = 1),
+                   meanDist = mean((as.numeric(dist)/1000)),
+                   sdDist = sd((as.numeric(dist)/1000)),
+                   minDist = min((as.numeric(dist)/1000)),
+                   maxDist = max((as.numeric(dist)/1000)),
+                   meanTime = mean(as.numeric(time_lag)),
+                   sdTime = sd(as.numeric(time_lag)),
+                   minTime = min(as.numeric(time_lag)),
+                   maxTime = max(as.numeric(time_lag)))
+
+## Summaries from less than 10 days drifting
+
+driftSummary_ID_Campaign_10 <- 
+  driftDistTime %>% 
+  dplyr::filter(time_lag < 10) %>% 
+  group_by(campaign, id) %>% 
+  dplyr::summarise(n = n(),
+                   n_percentage = round(((n()/33)*100), digits = 1),
+                   meanDist = mean((as.numeric(dist)/1000)),
+                   sdDist = sd((as.numeric(dist)/1000)),
+                   minDist = min((as.numeric(dist)/1000)),
+                   maxDist = max((as.numeric(dist)/1000)),
+                   meanTime = mean(as.numeric(time_lag)),
+                   sdTime = sd(as.numeric(time_lag)),
+                   minTime = min(as.numeric(time_lag)),
+                   maxTime = max(as.numeric(time_lag)))
+
+driftSummary_State_10 <- 
+  driftDistTime %>% 
+  dplyr::filter(time_lag < 10) %>% 
+  group_by(state) %>% 
+  dplyr::summarise(n = n(),
+                   n_percentage = round(((n()/297)*100), digits = 1),
+                   meanDist = mean((as.numeric(dist)/1000)),
+                   sdDist = sd((as.numeric(dist)/1000)),
+                   minDist = min((as.numeric(dist)/1000)),
+                   maxDist = max((as.numeric(dist)/1000)),
+                   meanTime = mean(as.numeric(time_lag)),
+                   sdTime = sd(as.numeric(time_lag)),
+                   minTime = min(as.numeric(time_lag)),
+                   maxTime = max(as.numeric(time_lag)))
+
+## Plot time x days
+plot(driftDistTime$time_lag, driftDistTime$dist)
+plot(log(as.numeric(driftDistTime$time_lag)), log(driftDistTime$dist))
 
 # Monitored beach segments - OPEN DATA AND MERGE ALL SHAPEFILES INTO ONE ####
 
