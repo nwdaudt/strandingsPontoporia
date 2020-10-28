@@ -17,9 +17,11 @@
 # rm(list = ls())
 
 # Libraries ####
+library(plyr)
 library(tidyverse)
 library(mapview)
 library(sf)
+# library(lwgeom)
 library(ecmwfr)
 library(ncdf4)
 library(reticulate)
@@ -30,7 +32,8 @@ library(reticulate)
 # setwd("C:/Users/jessicas/Documents/strandingsPontoporia/")
 # Lembrando, Jony - se tens um "projeto", o setwd ta automatico pra ti...
 
-## Open Pontoporia dataset
+#
+### Open Pontoporia dataset
 pontoporia <- as.data.frame(
   readxl::read_xlsx("./Pontoporia PMP 2015_08_24 a 2020_06_11 SC_PR_SP_RJ.xlsx", 
                     sheet = 2))
@@ -63,37 +66,87 @@ levels(pontoporia$sex) <- list(female = "Fêmea",
                                unkwown = "Indefinido")
 
 ## Transform df into a geospatial feature
-pontoporiaSpatial <- sf::st_as_sf(pontoporia, coords = c("long", "lat"), crs = 4326)
+pontoporiaSpatial <- 
+  sf::st_as_sf(pontoporia, coords = c("long", "lat"), crs = 4326)
 
-pontoporiaMapview <- # Run this line to add visualization into a df
-  mapview::mapview(pontoporiaSpatial, cex = 0.2)
-
-## Open drift_experiment dataset
-drift <- as.data.frame(
-  readr::read_csv("./drift_experiment.csv", col_names = TRUE))
+#
+### Open drift_experiment dataset
+drift <- utils::read.csv("./drift_experiment_data.csv", sep=";")
 
 ## Transform dataframe into a geospatial feature
-# Need to remove observations with 'NA' in lat/long
+# Need to remove observations with NA in "lat/long" and "id"
+# Create an "id_distance" for calculate time between Release and Stranding
 driftSpatial <- 
   drift %>% 
   dplyr::filter(lat != is.na(lat)) %>% 
+  dplyr::filter(id != is.na(id)) %>%
+  dplyr::mutate(id_distance = paste(campaign, id, release_stranding)) %>%
   sf::st_as_sf(coords = c("long", "lat"), crs = 4326)
 
-driftReleaseStations <- 
-  driftSpatial %>% 
-  dplyr::filter(id_data == "release")
+driftSpatial$date <- lubridate::dmy(driftSpatial$date)
+driftSpatial$campaign <- as.factor(driftSpatial$campaign)
+driftSpatial$id_distance <- as.factor(driftSpatial$id_distance)
 
-driftReleaseStationsMapview <- # Run this line to add visualization into a df
-  mapview::mapview(driftReleaseStations, zcol = "campaign" )
-
-## Open isobath dataset
+#
+### Open isobath dataset
 isobath <- sf::st_read("./linhasbatimetricas/linhas_lim_200m.shp")
 
+# Initial visualizations -- strandings, drifts ####
+
+# Mapview Pontoporia strandings
+pontoporiaMapview <- # Run this line to add visualization into a df
+  mapview::mapview(pontoporiaSpatial, cex = 0.2)
+
+# Mapview Release Stations from drift experiment
+driftReleaseStationsMapview <- # Run this line to add visualization into a df
+  mapview::mapview(dplyr::filter(driftSpatial, id_data == "release"), 
+                   zcol = "campaign")
+
+# Mapview isobath 50m
 isobath50Mapview <- # Run this line to add visualization into a df
   mapview::mapview(dplyr::filter(isobath, ELEV == 50))
 
 ## Visualize them all
 driftReleaseStationsMapview + isobath50Mapview + pontoporiaMapview
+
+# Drift experiment - Mean distance & time between release and strandings ####
+
+## Create 'release' and 'strandings' vectors to use as basis for calculations
+vectorRelease <- 
+  driftSpatial %>% 
+  as.data.frame() %>% 
+  dplyr::select(id_distance) %>% 
+  dplyr::filter(stringr::str_detect(id_distance, "R$")) %>% 
+  droplevels()
+
+vectorRelease <- as.character(vectorRelease[['id_distance']])
+
+vectorStranding <- as.character(as.factor(stringr::str_replace(as.character(vectorRelease), "R", "S")))
+
+## Calculate the distance between release and stranding location
+driftDist <- list()
+
+for(i in 1:27)
+  driftDist[[i]] <- 
+  sf::st_distance(driftSpatial$geometry[driftSpatial$id_distance == vectorRelease[i]], 
+                  driftSpatial$geometry[driftSpatial$id_distance == vectorStranding[i]], 
+                  by_element = FALSE)
+
+mean(driftDist[[i]]); sd(driftDist[[i]]); min(driftDist[[i]]); max(driftDist[[i]])
+
+# Duration between release and stranding
+driftTime <- list()
+
+for(i in 1:27)
+  driftTime[[i]] <- 
+  (driftSpatial$date[driftSpatial$id_distance == vectorRelease[i]]) -
+  (driftSpatial$date[driftSpatial$id_distance == vectorStranding[i]])
+
+mean(driftTime[[i]]); sd(driftTime[[i]]); min(driftTime[[i]]); max(driftTime[[i]])
+
+# Considering distance between stranding and release position 
+# for drifting time less than 10 days
+
 
 # Monitored beach segments - OPEN DATA AND MERGE ALL SHAPEFILES INTO ONE ####
 
