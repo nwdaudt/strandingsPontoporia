@@ -8,6 +8,7 @@ library(sf)
 library(ecmwfr)
 library(ncdf4)
 library(reticulate)
+library(raster)
 
 # Open file and visualize ###
 # rm(list = ls())
@@ -65,28 +66,3 @@ mapview(filter(merged.lines, beach_name != "Praia não identificada"))
 # check for unique ids:
 pontoporia %>% group_by(id) %>% count()
 
-## start downloading data:
-
-wf_set_key("user" = "jessica.leiria@gmail.com",
-  "key" = "afc55855c5156df018fa0173630fe672",
-  "service" = "webapi")
-
-request <- list("dataset_short_name" = "reanalysis-era5-pressure-levels",
-                "product_type"   = "reanalysis",
-                "variable"       = "temperature",
-                "pressure_level" = "850",
-                "year"           = "2000",
-                "month"          = "04",
-                "day"            = "04",
-                "time"           = "00:00",
-                "area"           = "70/-20/30/60",
-                "format"         = "netcdf",
-                "target"         = "era5-demo.nc")
-
-# Start downloading the data, the path of the file
-# will be returned as a variable (ncfile)
-ncfile <- wf_request(user = "2088",
-                     request = request,   
-                     transfer = TRUE,  
-                     path = "~",
-                     verbose = FALSE)
