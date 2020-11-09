@@ -98,9 +98,23 @@ drift <-
 drift$date_r <- lubridate::dmy(drift$date_r)
 drift$date_s <- lubridate::dmy(drift$date_s)
 
+## Create "zone" column -- spatial-similar release stations 
+drift <- 
+  drift %>% 
+  dplyr::mutate(
+    zone = 
+      ifelse(lat_r > -23.8, "1", 
+             ifelse(-23.8 > lat_r & lat_r > -24.4,"2", 
+                    ifelse(-24.4 > lat_r & lat_r > -26, "3", "4"))))
+
+drift$zone <- as.factor(drift$zone)
+
+driftSpatial <- 
+  drift %>% sf::st_as_sf(coords = c("long_r", "lat_r"), crs = 4326)
+
 #
 ## Open isobath dataset
-isobath <- sf::st_read("./linhasbatimetricas/linhas_lim_200m.shp")
+isobath <- sf::st_read("./linhas_batimetricas/linhas_lim_200m.shp")
 
 # Mapview -- quick spatial check on strandings and drifts ####
 
@@ -110,15 +124,14 @@ pontoporiaMapview <- # Run this line to add visualization into a df
 
 ## Mapview Release Stations from drift experiment
 driftReleaseStationsMapview <- # Run this line to add visualization into a df
-  mapview::mapview(dplyr::filter(driftSpatial, id_data == "release"), 
-                   zcol = "campaign")
+  mapview::mapview(driftSpatial, zcol = "zone")
 
-## Mapview isobath 50m
-isobath50Mapview <- # Run this line to add visualization into a df
-  mapview::mapview(dplyr::filter(isobath, ELEV == 50))
+## Mapview isobath 30m
+isobath30Mapview <- # Run this line to add visualization into a df
+  mapview::mapview(dplyr::filter(isobath, ELEV == 30))
 
 ## Visualize them all
-driftReleaseStationsMapview + isobath50Mapview + pontoporiaMapview
+driftReleaseStationsMapview + isobath30Mapview + pontoporiaMapview
 
 # Drift experiment - Mean distance & time between release and strandings ####
 
@@ -137,13 +150,13 @@ driftSpatial_s <-
 ## Calculate distance and time between 'r' and 's'
 driftDistTime <- 
   drift %>% 
-  dplyr::select(campaign, id, state, 
+  dplyr::select(campaign, id, state, zone, 
                 date_r, date_s, 
                 lat_r, long_r, 
                 lat_s, long_s) %>% 
-  mutate(dist = sf::st_distance(
+  dplyr::mutate(dist = sf::st_distance(
     driftSpatial_r$geometry, driftSpatial_s$geometry, by_element = T)) %>% 
-  mutate(time_lag = (date_s) - (date_r))
+  dplyr::mutate(time_lag = (date_s) - (date_r))
 
 #
 ## Summaries
@@ -199,6 +212,20 @@ driftSummary_State_10 <-
   group_by(state) %>% 
   dplyr::summarise(n = n(),
                    n_percentage = round(((n()/297)*100), digits = 1),
+                   meanDist = mean((as.numeric(dist)/1000)),
+                   sdDist = sd((as.numeric(dist)/1000)),
+                   minDist = min((as.numeric(dist)/1000)),
+                   maxDist = max((as.numeric(dist)/1000)),
+                   meanTime = mean(as.numeric(time_lag)),
+                   sdTime = sd(as.numeric(time_lag)),
+                   minTime = min(as.numeric(time_lag)),
+                   maxTime = max(as.numeric(time_lag)))
+
+driftSummary_Zone_10 <- 
+  driftDistTime %>% 
+  dplyr::filter(time_lag < 10) %>% 
+  dplyr::group_by(zone) %>% 
+  dplyr::summarise(n = n(),
                    meanDist = mean((as.numeric(dist)/1000)),
                    sdDist = sd((as.numeric(dist)/1000)),
                    minDist = min((as.numeric(dist)/1000)),
