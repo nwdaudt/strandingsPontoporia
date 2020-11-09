@@ -163,7 +163,7 @@ driftDistTime <-
 
 driftSummary_ID_Campaign <- 
   driftDistTime %>% 
-  group_by(campaign, id) %>% 
+  dplyr::group_by(campaign, id) %>% 
   dplyr::summarise(n = n(),
                    n_percentage = round(((n()/33)*100), digits = 1),
                    meanDist = mean((as.numeric(dist)/1000)),
@@ -177,7 +177,7 @@ driftSummary_ID_Campaign <-
 
 driftSummary_State <- 
   driftDistTime %>% 
-  group_by(state) %>% 
+  dplyr::group_by(state) %>% 
   dplyr::summarise(n = n(),
                    n_percentage = round(((n()/297)*100), digits = 1),
                    meanDist = mean((as.numeric(dist)/1000)),
@@ -194,7 +194,7 @@ driftSummary_State <-
 driftSummary_ID_Campaign_10 <- 
   driftDistTime %>% 
   dplyr::filter(time_lag < 10) %>% 
-  group_by(campaign, id) %>% 
+  dplyr::group_by(campaign, id) %>% 
   dplyr::summarise(n = n(),
                    n_percentage = round(((n()/33)*100), digits = 1),
                    meanDist = mean((as.numeric(dist)/1000)),
@@ -209,7 +209,7 @@ driftSummary_ID_Campaign_10 <-
 driftSummary_State_10 <- 
   driftDistTime %>% 
   dplyr::filter(time_lag < 10) %>% 
-  group_by(state) %>% 
+  dplyr::group_by(state) %>% 
   dplyr::summarise(n = n(),
                    n_percentage = round(((n()/297)*100), digits = 1),
                    meanDist = mean((as.numeric(dist)/1000)),
