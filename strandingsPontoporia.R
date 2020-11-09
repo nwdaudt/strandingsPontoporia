@@ -8,7 +8,7 @@
 
 ### General tidy rules - - - - - 
 # variable_names <- write with lower case and underlines
-# dataframeNames <- cammelCase style (startLowerCaseAndEveryNewWorldStartWithCapital)
+# dataframeNames <- cammelCase style (startLowerCaseAndEveryNewWordStartWithCapital)
 # package::function notation, unless from 'base' packages
 # Sessions delimited by "# Session name ####"
 # Every step within the Session, use ## and a quick comment
@@ -63,6 +63,23 @@ pontoporia$sex <- as.factor(pontoporia$sex)
 levels(pontoporia$sex) <- list(female = "Fêmea", 
                                male = "Macho", 
                                unkwown = "Indefinido")
+
+pontoporia$state <- as.factor(pontoporia$state)
+
+## Remove records from "state" == Rio de Janeiro & "cod_decomposition" == 5 
+pontoporia <- 
+  pontoporia %>% 
+  dplyr::filter(state != "Rio de Janeiro") %>% 
+  dplyr::filter(cod_decomposition != 5)
+
+## Create column "date" and "back_date", 
+## for future environment variables gathering
+pontoporia <- 
+  pontoporia %>% 
+  dplyr::mutate(date = lubridate::as_date(date_hour)) %>% 
+  dplyr::mutate(back_date = lubridate::as_date(ifelse(cod_decomposition == 2, 
+                                                      date - 1, 
+                                                      date - 6)))
 
 ## Transform df into a geospatial feature
 pontoporiaSpatial <- 
