@@ -72,14 +72,17 @@ pontoporia <-
   dplyr::filter(state != "Rio de Janeiro") %>% 
   dplyr::filter(cod_decomposition != 5)
 
-## Create column "date" and "back_date", 
+## Create column "date", "back_date", and "zone"
 ## for future environment variables gathering
 pontoporia <- 
   pontoporia %>% 
   dplyr::mutate(date = lubridate::as_date(date_hour)) %>% 
   dplyr::mutate(back_date = lubridate::as_date(ifelse(cod_decomposition == 2, 
                                                       date - 1, 
-                                                      date - 6)))
+                                                      date - 6))) %>% 
+  dplyr::mutate(zone = 
+                  ifelse(lat > -23.75, "1", 
+                         ifelse(-23.75 > lat & lat > -26,"2", "3")))
 
 ## Transform df into a geospatial feature
 pontoporiaSpatial <- 
