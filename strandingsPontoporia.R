@@ -8,7 +8,7 @@
 
 ### General tidy rules - - - - - 
 # variable_names <- write with lower case and underlines
-# dataframeNames <- cammelCase style (startLowerCaseAndEveryNewWorldStartWithCapital)
+# dataframeNames <- cammelCase style (startLowerCaseAndEveryNewWordStartWithCapital)
 # package::function notation, unless from 'base' packages
 # Sessions delimited by "# Session name ####"
 # Every step within the Session, use ## and a quick comment
@@ -64,6 +64,26 @@ levels(pontoporia$sex) <- list(female = "Fêmea",
                                male = "Macho", 
                                unkwown = "Indefinido")
 
+pontoporia$state <- as.factor(pontoporia$state)
+
+## Remove records from "state" == Rio de Janeiro & "cod_decomposition" == 5 
+pontoporia <- 
+  pontoporia %>% 
+  dplyr::filter(state != "Rio de Janeiro") %>% 
+  dplyr::filter(cod_decomposition != 5)
+
+## Create column "date", "back_date", and "zone"
+## for future environment variables gathering
+pontoporia <- 
+  pontoporia %>% 
+  dplyr::mutate(date = lubridate::as_date(date_hour)) %>% 
+  dplyr::mutate(back_date = lubridate::as_date(ifelse(cod_decomposition == 2, 
+                                                      date - 1, 
+                                                      date - 6))) %>% 
+  dplyr::mutate(zone = 
+                  ifelse(lat > -23.75, "1", 
+                         ifelse(-23.75 > lat & lat > -26,"2", "3")))
+
 ## Transform df into a geospatial feature
 pontoporiaSpatial <- 
   sf::st_as_sf(pontoporia, coords = c("long", "lat"), crs = 4326)
@@ -81,9 +101,23 @@ drift <-
 drift$date_r <- lubridate::dmy(drift$date_r)
 drift$date_s <- lubridate::dmy(drift$date_s)
 
+## Create "zone" column -- spatial-similar release stations 
+drift <- 
+  drift %>% 
+  dplyr::mutate(
+    zone = 
+      ifelse(lat_r > -23.8, "1", 
+             ifelse(-23.8 > lat_r & lat_r > -24.4,"2", 
+                    ifelse(-24.4 > lat_r & lat_r > -26, "3", "4"))))
+
+drift$zone <- as.factor(drift$zone)
+
+driftSpatial <- 
+  drift %>% sf::st_as_sf(coords = c("long_r", "lat_r"), crs = 4326)
+
 #
 ## Open isobath dataset
-isobath <- sf::st_read("./linhasbatimetricas/linhas_lim_200m.shp")
+isobath <- sf::st_read("./linhas_batimetricas/linhas_lim_200m.shp")
 
 # Mapview -- quick spatial check on strandings and drifts ####
 
@@ -93,15 +127,14 @@ pontoporiaMapview <- # Run this line to add visualization into a df
 
 ## Mapview Release Stations from drift experiment
 driftReleaseStationsMapview <- # Run this line to add visualization into a df
-  mapview::mapview(dplyr::filter(driftSpatial, id_data == "release"), 
-                   zcol = "campaign")
+  mapview::mapview(driftSpatial, zcol = "zone")
 
-## Mapview isobath 50m
-isobath50Mapview <- # Run this line to add visualization into a df
-  mapview::mapview(dplyr::filter(isobath, ELEV == 50))
+## Mapview isobath 30m
+isobath30Mapview <- # Run this line to add visualization into a df
+  mapview::mapview(dplyr::filter(isobath, ELEV == 30))
 
 ## Visualize them all
-driftReleaseStationsMapview + isobath50Mapview + pontoporiaMapview
+driftReleaseStationsMapview + isobath30Mapview + pontoporiaMapview
 
 # Drift experiment - Mean distance & time between release and strandings ####
 
@@ -120,20 +153,20 @@ driftSpatial_s <-
 ## Calculate distance and time between 'r' and 's'
 driftDistTime <- 
   drift %>% 
-  dplyr::select(campaign, id, state, 
+  dplyr::select(campaign, id, state, zone, 
                 date_r, date_s, 
                 lat_r, long_r, 
                 lat_s, long_s) %>% 
-  mutate(dist = sf::st_distance(
+  dplyr::mutate(dist = sf::st_distance(
     driftSpatial_r$geometry, driftSpatial_s$geometry, by_element = T)) %>% 
-  mutate(time_lag = (date_s) - (date_r))
+  dplyr::mutate(time_lag = (date_s) - (date_r))
 
 #
 ## Summaries
 
 driftSummary_ID_Campaign <- 
   driftDistTime %>% 
-  group_by(campaign, id) %>% 
+  dplyr::group_by(campaign, id) %>% 
   dplyr::summarise(n = n(),
                    n_percentage = round(((n()/33)*100), digits = 1),
                    meanDist = mean((as.numeric(dist)/1000)),
@@ -147,7 +180,7 @@ driftSummary_ID_Campaign <-
 
 driftSummary_State <- 
   driftDistTime %>% 
-  group_by(state) %>% 
+  dplyr::group_by(state) %>% 
   dplyr::summarise(n = n(),
                    n_percentage = round(((n()/297)*100), digits = 1),
                    meanDist = mean((as.numeric(dist)/1000)),
@@ -164,7 +197,7 @@ driftSummary_State <-
 driftSummary_ID_Campaign_10 <- 
   driftDistTime %>% 
   dplyr::filter(time_lag < 10) %>% 
-  group_by(campaign, id) %>% 
+  dplyr::group_by(campaign, id) %>% 
   dplyr::summarise(n = n(),
                    n_percentage = round(((n()/33)*100), digits = 1),
                    meanDist = mean((as.numeric(dist)/1000)),
@@ -179,9 +212,23 @@ driftSummary_ID_Campaign_10 <-
 driftSummary_State_10 <- 
   driftDistTime %>% 
   dplyr::filter(time_lag < 10) %>% 
-  group_by(state) %>% 
+  dplyr::group_by(state) %>% 
   dplyr::summarise(n = n(),
                    n_percentage = round(((n()/297)*100), digits = 1),
+                   meanDist = mean((as.numeric(dist)/1000)),
+                   sdDist = sd((as.numeric(dist)/1000)),
+                   minDist = min((as.numeric(dist)/1000)),
+                   maxDist = max((as.numeric(dist)/1000)),
+                   meanTime = mean(as.numeric(time_lag)),
+                   sdTime = sd(as.numeric(time_lag)),
+                   minTime = min(as.numeric(time_lag)),
+                   maxTime = max(as.numeric(time_lag)))
+
+driftSummary_Zone_10 <- 
+  driftDistTime %>% 
+  dplyr::filter(time_lag < 10) %>% 
+  dplyr::group_by(zone) %>% 
+  dplyr::summarise(n = n(),
                    meanDist = mean((as.numeric(dist)/1000)),
                    sdDist = sd((as.numeric(dist)/1000)),
                    minDist = min((as.numeric(dist)/1000)),
