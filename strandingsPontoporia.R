@@ -22,19 +22,17 @@ library(tidyverse)
 library(mapview)
 library(sf)
 # library(lwgeom)
-library(ecmwfr)
-library(ncdf4)
-library(reticulate)
+# library(ecmwfr)
+# library(ncdf4)
+# library(reticulate)
 # library(mgcv)
 
-# Open files and visualize ####
-
-# setwd("C:/Users/jessicas/Documents/strandingsPontoporia/")
+# Open Pontoporia stranding data, drift experiment data, and isobath ####
 
 #
 ## Open Pontoporia dataset
 pontoporia <- as.data.frame(
-  readxl::read_xlsx("./Pontoporia PMP 2015_08_24 a 2020_06_11 SC_PR_SP_RJ.xlsx", 
+  readxl::read_xlsx("./data/Pontoporia PMP 2015_08_24 a 2020_06_11 SC_PR_SP_RJ.xlsx", 
                     sheet = 2))
 
 ## Filter columns
@@ -84,13 +82,17 @@ pontoporia <-
                   ifelse(lat > -23.75, "1", 
                          ifelse(-23.75 > lat & lat > -26,"2", "3")))
 
+# PS - "zones" were defined based on summaries related to mean drifting 
+# distances from the 'drift_experiment'.
+## See next steps, and summary df 'driftSummary_Zone_10'
+
 ## Transform df into a geospatial feature
 pontoporiaSpatial <- 
   sf::st_as_sf(pontoporia, coords = c("long", "lat"), crs = 4326)
 
 #
 ## Open drift_experiment dataset
-drift <- utils::read.csv("./drift_experiment_data.csv", sep=";")
+drift <- utils::read.csv("./data/drift_experiment_data.csv", sep = ";")
 
 ## Filter and set up Date columns
 drift <- 
@@ -101,7 +103,7 @@ drift <-
 drift$date_r <- lubridate::dmy(drift$date_r)
 drift$date_s <- lubridate::dmy(drift$date_s)
 
-## Create "zone" column -- spatial-similar release stations 
+## Create "zone" column - In this case, means spatial-similar release stations 
 drift <- 
   drift %>% 
   dplyr::mutate(
@@ -112,20 +114,21 @@ drift <-
 
 drift$zone <- as.factor(drift$zone)
 
+## Transform df into a geospatial feature
 driftSpatial <- 
   drift %>% sf::st_as_sf(coords = c("long_r", "lat_r"), crs = 4326)
 
 #
 ## Open isobath dataset
-isobath <- sf::st_read("./linhas_batimetricas/linhas_lim_200m.shp")
+isobath <- sf::st_read("./bathymetry/linhas_lim_200m.shp")
 
-# Mapview -- quick spatial check on strandings and drifts ####
+# Mapview - quick spatial check on strandings and drifts ####
 
 ## Mapview Pontoporia strandings
 pontoporiaMapview <- # Run this line to add visualization into a df
   mapview::mapview(pontoporiaSpatial, cex = 0.2)
 
-## Mapview Release Stations from drift experiment
+## Mapview Release Stations from drift_experiment
 driftReleaseStationsMapview <- # Run this line to add visualization into a df
   mapview::mapview(driftSpatial, zcol = "zone")
 
@@ -135,6 +138,9 @@ isobath30Mapview <- # Run this line to add visualization into a df
 
 ## Visualize them all
 driftReleaseStationsMapview + isobath30Mapview + pontoporiaMapview
+
+rm(pontoporiaSpatial, driftSpatial, 
+  driftReleaseStationsMapview, isobath30Mapview, pontoporiaMapview)
 
 # Drift experiment - Mean distance & time between release and strandings ####
 
@@ -158,7 +164,7 @@ driftDistTime <-
                 lat_r, long_r, 
                 lat_s, long_s) %>% 
   dplyr::mutate(dist = sf::st_distance(
-    driftSpatial_r$geometry, driftSpatial_s$geometry, by_element = T)) %>% 
+    driftSpatial_r$geometry, driftSpatial_s$geometry, by_element = TRUE)) %>% 
   dplyr::mutate(time_lag = (date_s) - (date_r))
 
 #
@@ -224,7 +230,7 @@ driftSummary_State_10 <-
                    minTime = min(as.numeric(time_lag)),
                    maxTime = max(as.numeric(time_lag)))
 
-driftSummary_Zone_10 <- 
+driftSummary_Zone_10 <-  ## This was the basis for "zones" in 'pontoporia' df.
   driftDistTime %>% 
   dplyr::filter(time_lag < 10) %>% 
   dplyr::group_by(zone) %>% 
@@ -239,65 +245,150 @@ driftSummary_Zone_10 <-
                    maxTime = max(as.numeric(time_lag)))
 
 ## Plot time x days
-plot(driftDistTime$time_lag, driftDistTime$dist)
 plot(log(as.numeric(driftDistTime$time_lag)), log(driftDistTime$dist))
 
-# Monitored beach segments - OPEN DATA AND MERGE ALL SHAPEFILES INTO ONE ####
+rm(driftSpatial_r, driftSpatial_s, 
+   driftSummary_ID_Campaign, driftSummary_ID_Campaign_10, 
+   driftSummary_State, driftSummary_State_10)
+# Keep 'driftSummary_Zone_10' for easiest check, if needed
 
-## Create a list with all sub-directories containing the shapefiles:
-ff <- as.list(list.files(path = ".", 
-                         pattern = "linha.shp$", 
-                         recursive = TRUE, 
-                         full.names = TRUE))
+# Effort - monitored beach segments & Sectors polygon ####
+ef_SP <- read.csv2("data/Effort_SP_aug2019_jul_2020.csv",
+                   header = TRUE, encoding = "UTF-8")
+ef_SC_PR <- read.csv2("data/Effort_SC_PR_aug2019_jul_2020.csv",
+                      header = TRUE, encoding = "UTF-8")
+ef_SP_PR_SC <- read.csv2("data/Effort_SC_PR_SP_aug2015_aug_2019.csv",
+                         header = TRUE, encoding = "UTF-8")
 
-## Function to open the shps in sub-directories
+eff <- rbind(ef_SP,ef_SC_PR,ef_SP_PR_SC)
+
+rm(list = ls(pattern = "ef_"))
+
+# split data and hour
+eff$initialDate <- lubridate::dmy(
+  sapply(strsplit(as.character(eff$Data.Hora.início), " "), "[", 1))
+eff$initialTime <- 
+  sapply(strsplit(as.character(eff$Data.Hora.início), " "), "[", 2)
+
+# Removing unused columns
+eff[c(2:3,10:12,15:16)] <- list(NULL) 
+
+# Rename columns
+colnames(eff) <- c("code","state","city","beach","stretch","type","strategy",
+                   "initialLat","initialLong",
+                   "complete", "initialDate", "initialTime")
+
+# write.table(eff, "./data/Effort_complete.txt", dec = ".", sep = ";")
+
+# Create a spatial point polygon
+effSpatial <- 
+  eff %>% 
+  sf::st_as_sf(coords = c("initialLong","initialLat"), 
+               crs = 4674)
+
+#
+## Open shapefiles (shp) with beach monitoring lines
+
+## Create a list with all subdirectories containing the shp
+ff <- as.list(list.files(path = ".", pattern = "linha.shp$", 
+                         recursive = TRUE, full.names = TRUE))
+
+## Function to open the shp in subdirectories
 open_shp <- function(ff){
   linha <- sf::read_sf(ff[i])
   linha
 }
 
-## A loop creating a list with all shapefiles
-linhas <- list()
+## Loop creating a list with all shp
+lines <- list()
 for (i in 1:length(ff)) {
-  linhas[[i]] <- open_shp(ff)
+  lines[[i]] <- open_shp(ff)
 }
 
-## Merge all monitoring lines in one shapefile
-mergedLines <- do.call(rbind, linhas)
+## Merge all beach monitoring lines into one shp
+merged.lines <- do.call(rbind, lines)
 
-## Visualize beach segments
-mapview::mapview(filter(mergedLines, beach_name != "Praia não identificada"))
+# sf::st_write(merged.lines,"./merged_lines.shp")  ## saving the shp
 
+merged.lines <- 
+  dplyr::filter(merged.lines, compriment != 0) %>% 
+  dplyr::mutate(id = row_number()) %>% 
+  sf::st_cast("MULTILINESTRING")
 
-# Starting data collection from ERA5: ####
+merged.lines <- 
+  merged.lines %>% 
+  sf::st_cast("LINESTRING", warn = TRUE, do_split = TRUE)
 
-## Check for unique ids
-pontoporia %>% dplyr::group_by(id) %>% count()
+# mapview::mapview(merged.lines)
 
-## Start downloading data
+#
+## Create a 30 latitudinal-band Sector polygon,
+## which will be the basis for final analysis
 
-wf_set_key("user" = "jessica.leiria@gmail.com",
-  "key" = "afc55855c5156df018fa0173630fe672",
-  "service" = "webapi")
+# Latitudinal definition
+n <- diff(sf::st_bbox(merged.lines)[c(2, 4)])/30
+# Longitudinal definition
+m <- diff(sf::st_bbox(merged.lines)[c(1, 3)])
 
-request <- list("dataset_short_name" = "reanalysis-era5-pressure-levels", 
-                "product_type"   = "reanalysis", 
-                "variable"       = "temperature", 
-                "pressure_level" = "850", 
-                "year"           = "2000", 
-                "month"          = "04", 
-                "day"            = "04", 
-                "time"           = "00:00", 
-                "area"           = "70/-20/30/60", 
-                "format"         = "netcdf", 
-                "target"         = "era5-demo.nc")
+## Create the sectors based on 'merged.lines' extend
+sectors <- sf::st_make_grid(merged.lines, cellsize = c(m, n))
 
-## Start downloading data
-# The path of the file will be returned as a variable (ncfile)
-ncfile <- wf_request(user = "2088", 
-                     request = request, 
-                     transfer = TRUE, 
-                     path = "~", 
-                     verbose = FALSE)
+## Set the correct spatial attributes for "sectors" layer
+# Define sectors as single feature
+sectors <- sf::st_sf(sectors)
 
-#################
+# Create an identifier for each sector
+sectors$id <- 1:nrow(sectors)
+
+# Define sectors as a multipolygon
+sectors <- 
+  sectors %>% 
+  sf::st_cast("MULTIPOLYGON")
+
+# Create a multiline feature based on "sectors" id limits
+sectors_lines <- sf::st_cast(sectors, "MULTILINESTRING", group_or_split = FALSE)
+
+# mapview::mapview(sectors_lines)
+
+#
+## Look for intersections between the 30 latitudinal-band 'sectors' and
+## the monitored beaches 'merged.lines'
+## Cut features and calculate each segment length, for calculate effort (km)
+
+# Calculate intersection between 'merged.lines' and 'sectors'
+line_intersection_join <- 
+  sf::st_intersection(merged.lines, sectors)
+
+## Define each line segment as an unique feature
+line_intersection_join <- 
+  line_intersection_join %>% 
+  sf::st_cast("LINESTRING")
+
+# Add a new id for each segment line "uid"
+line_intersection_join$uid <- 1:nrow(line_intersection_join)
+
+# mapview::mapview(line_intersection_join) + sectors_lines
+
+## Calculate individual segment lengths
+line_intersection_join$length <- sf::st_length(line_intersection_join)
+
+## Merge the beach transect into the starting point of each monitoring
+## Finds the closest line to each point and adds the line id as a new column
+effSpatial$closestBeach <- sf::st_nearest_feature(effSpatial, 
+                                                  line_intersection_join)
+effSpatial <- merge(effSpatial, sf::st_drop_geometry(line_intersection_join), 
+                    by.x = "closestBeach", by.y = "uid", all.y = F)
+
+## checking
+mapview(filter(line_intersection_join, 
+               beach_name == "Vila/Itapirubá Norte")) + sectors_lines + effSpatial[1:1000,]
+mapview(filter(line_intersection_join, 
+               uid == 5)) + sectors_lines + filter(effSpatial, closestBeach == 5)
+
+# Environment data collection from ERA5 ####
+##
+## This step was based on a Python routine 
+## files = {apiRequest.py} + {requirements.txt}
+##
+
+###################
