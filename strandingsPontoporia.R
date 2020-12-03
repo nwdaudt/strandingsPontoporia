@@ -38,17 +38,17 @@ pontoporia <- as.data.frame(
 ## Filter columns
 pontoporia <- 
   pontoporia %>% 
-  dplyr::select(Código, `Identificador do indivíduo`, Estado, Praia, Trecho, 
+  dplyr::select(`Identificador do indivíduo`, Estado, Praia, Trecho, 
          `Estratégia do trecho`, `Tipo do monitoramento`, `Data/Hora`, 
          `Ponto - Lat`, `Ponto - Long`, `Condição da carcaça`, `OFAI - Sexo`)
 
 ## Rename columns and levels
-names(pontoporia) <- c("id", "id_individual", "state", "beach",
-                       "strech_name", "strech_scheme", "monitoring_type",
+names(pontoporia) <- c("id_individual", "state", "beach",
+                       "stretch_name", "stretch_scheme", "monitoring_type",
                        "date_hour", "lat", "long", "cod_decomposition", "sex")
 
-pontoporia$strech_scheme <- as.factor(pontoporia$strech_scheme)
-levels(pontoporia$strech_scheme) <- list(daily = "Diário", 
+pontoporia$stretch_scheme <- as.factor(pontoporia$stretch_scheme)
+levels(pontoporia$stretch_scheme) <- list(daily = "Diário", 
                                          weekly = "Semanal", 
                                          fortnightly = "Diário 15", 
                                          call = "Acionamento")
@@ -82,8 +82,8 @@ pontoporia <-
                   ifelse(lat > -23.75, "1", 
                          ifelse(-23.75 > lat & lat > -26,"2", "3")))
 
-# PS - "zones" were defined based on summaries related to mean drifting 
-# distances from the 'drift_experiment'.
+## PS - "zones" were defined based on summaries related to mean drifting 
+## distances from the 'drift_experiment'.
 ## See next steps, and summary df 'driftSummary_Zone_10'
 
 ## Transform df into a geospatial feature
@@ -252,7 +252,7 @@ rm(driftSpatial_r, driftSpatial_s,
    driftSummary_State, driftSummary_State_10)
 # Keep 'driftSummary_Zone_10' for easiest check, if needed
 
-# Effort - monitored beach segments & Sectors polygon ####
+# Effort - split monitored beach segments based on sectors polygon ####
 ef_SP <- read.csv2("data/Effort_SP_aug2019_jul_2020.csv",
                    header = TRUE, encoding = "UTF-8")
 ef_SC_PR <- read.csv2("data/Effort_SC_PR_aug2019_jul_2020.csv",
@@ -280,12 +280,6 @@ colnames(eff) <- c("code","state","city","beach","stretch","type","strategy",
 
 # write.table(eff, "./data/Effort_complete.txt", dec = ".", sep = ";")
 
-# Create a spatial point polygon
-effSpatial <- 
-  eff %>% 
-  sf::st_as_sf(coords = c("initialLong","initialLat"), 
-               crs = 4674)
-
 #
 ## Open shapefiles (shp) with beach monitoring lines
 
@@ -306,84 +300,141 @@ for (i in 1:length(ff)) {
 }
 
 ## Merge all beach monitoring lines into one shp
-merged.lines <- do.call(rbind, lines)
+originalStretches <- do.call(rbind, lines)
 
-# sf::st_write(merged.lines,"./merged_lines.shp")  ## saving the shp
+# sf::st_write(originalStretches,"./originalStretches.shp")  ## saving the shp
 
-merged.lines <- 
-  dplyr::filter(merged.lines, compriment != 0) %>% 
-  dplyr::mutate(id = row_number()) %>% 
+originalStretches <- 
+  dplyr::filter(originalStretches, compriment != 0) %>% 
+  dplyr::mutate(id_original = row_number()) %>% 
   sf::st_cast("MULTILINESTRING")
 
-merged.lines <- 
-  merged.lines %>% 
+originalStretches <- 
+  originalStretches %>% 
   sf::st_cast("LINESTRING", warn = TRUE, do_split = TRUE)
 
-# mapview::mapview(merged.lines)
+# mapview::mapview(originalStretches)
 
 #
 ## Create a 30 latitudinal-band Sector polygon,
 ## which will be the basis for final analysis
 
 # Latitudinal definition
-n <- diff(sf::st_bbox(merged.lines)[c(2, 4)])/30
+n <- diff(sf::st_bbox(originalStretches)[c(2, 4)])/30
 # Longitudinal definition
-m <- diff(sf::st_bbox(merged.lines)[c(1, 3)])
+m <- diff(sf::st_bbox(originalStretches)[c(1, 3)])
 
-## Create the sectors based on 'merged.lines' extend
-sectors <- sf::st_make_grid(merged.lines, cellsize = c(m, n))
+## Create the 'sectorsPolygon' based on 'originalStretches' extend
+sectorsPolygon <- sf::st_make_grid(originalStretches, cellsize = c(m, n))
 
-## Set the correct spatial attributes for "sectors" layer
-# Define sectors as single feature
-sectors <- sf::st_sf(sectors)
+## Set the correct spatial attributes for 'sectorsPolygon' layer
+# Define 'sectorsPolygon' as single feature
+sectorsPolygon <- sf::st_sf(sectorsPolygon)
 
 # Create an identifier for each sector
-sectors$id <- 1:nrow(sectors)
+sectorsPolygon$id_polygon <- 1:nrow(sectorsPolygon)
 
-# Define sectors as a multipolygon
-sectors <- 
-  sectors %>% 
+# Define sectorsPolygon as a multipolygon
+sectorsPolygon <- 
+  sectorsPolygon %>% 
   sf::st_cast("MULTIPOLYGON")
 
-# Create a multiline feature based on "sectors" id limits
-sectors_lines <- sf::st_cast(sectors, "MULTILINESTRING", group_or_split = FALSE)
+# mapview::mapview(sectorsPolygon)
 
-# mapview::mapview(sectors_lines)
+# Create a multiline feature based on 'sectorsPolygon' id limits
+sectorsPolygon_lines <- sf::st_cast(sectorsPolygon, "MULTILINESTRING", 
+                             group_or_split = FALSE)
+
+# mapview::mapview(sectorsPolygon_lines)
 
 #
-## Look for intersections between the 30 latitudinal-band 'sectors' and
-## the monitored beaches 'merged.lines'
+## Look for intersections between the 30 latitudinal-band 'sectorsPolygon' and
+## the monitored beaches 'originalStretches'
 ## Cut features and calculate each segment length, for calculate effort (km)
 
-# Calculate intersection between 'merged.lines' and 'sectors'
-line_intersection_join <- 
-  sf::st_intersection(merged.lines, sectors)
+# Calculate intersection between 'originalStretches' and 'sectorsPolygon'
+newStretches <- 
+  sf::st_intersection(originalStretches, sectorsPolygon)
 
 ## Define each line segment as an unique feature
-line_intersection_join <- 
-  line_intersection_join %>% 
+newStretches <- 
+  newStretches %>% 
   sf::st_cast("LINESTRING")
 
-# Add a new id for each segment line "uid"
-line_intersection_join$uid <- 1:nrow(line_intersection_join)
+# Add a new id for each segment line, called "id_newStretches"
+newStretches$id_newStretches <- 1:nrow(newStretches)
 
-# mapview::mapview(line_intersection_join) + sectors_lines
+# mapview::mapview(newStretches) + sectorsPolygon_lines
 
 ## Calculate individual segment lengths
-line_intersection_join$length <- sf::st_length(line_intersection_join)
+newStretches$length <- sf::st_length(newStretches)
 
-## Merge the beach transect into the starting point of each monitoring
-## Finds the closest line to each point and adds the line id as a new column
-effSpatial$closestBeach <- sf::st_nearest_feature(effSpatial, 
-                                                  line_intersection_join)
-effSpatial <- merge(effSpatial, sf::st_drop_geometry(line_intersection_join), 
-                    by.x = "closestBeach", by.y = "uid", all.y = F)
+## Cleaning 'newStretches' df
+newStretches <- 
+  newStretches %>% 
+  dplyr::select(id_polygon, 
+                id_original, 
+                stretch_id, 
+                beach_name, 
+                executing1, 
+                id_newStretches, 
+                length, 
+                geometry) %>% 
+  sf::st_as_sf() %>% 
+  sf::st_set_crs(4326)
 
-## checking
-mapview(filter(line_intersection_join, 
-               beach_name == "Vila/Itapirubá Norte")) + sectors_lines + effSpatial[1:1000,]
-mapview(filter(line_intersection_join, 
-               uid == 5)) + sectors_lines + filter(effSpatial, closestBeach == 5)
+# anti_join between 'eff' and 'pontoporia' ####
+
+eff_i <- 
+  eff %>% 
+  dplyr::filter(complete != "Sim") %>% 
+  dplyr::mutate(DateBeach = paste(initialDate, beach)) # ID for anti_join
+
+pontoporia <- 
+  pontoporia %>% 
+  dplyr::mutate(DateBeach = paste(date, beach)) # ID for anti_join
+
+pontoporia <- dplyr::anti_join(pontoporia, eff_i, by = "DateBeach")
+
+## Now we have just strandings collected on-effort, in complete-made stretches
+
+# 'pontoporia' spatial join with 'newStretches' [+ weeks] ####
+
+pontoporia <- 
+  pontoporia %>% 
+  dplyr::mutate(lat1 = lat,
+                long1 = long)
+
+# Update 'pontoporiaSpatial'
+pontoporiaSpatial <- 
+  sf::st_as_sf(pontoporia, coords = c("long1", "lat1"), crs = 4326)
+
+## Join attributes from 'newStretches' into 'pontoporia'
+pontoporiaSpatial1 <- sf::st_join(pontoporiaSpatial, newStretches, 
+                                  join = sf::st_nearest_feature)
+
+## Returning it into a df format, cleaning some columns
+## and create a 'week' columns (integer number of the week ~ year)
+pontoporia <- 
+  pontoporiaSpatial1 %>% 
+  as.data.frame() %>% 
+  dplyr::select(-c(beach, date_hour, DateBeach, geometry)) %>% 
+  dplyr::mutate(week = lubridate::week(date))
+
+## Just rearranging columns to a more logical order
+pontoporia <- 
+  pontoporia %>% 
+  base::subset(select = c(id_individual, lat, long, 
+                          executing1, state, beach_name, 
+                          stretch_name, stretch_id, id_original, 
+                          id_polygon, id_newStretches, length, 
+                          stretch_scheme, monitoring_type, 
+                          cod_decomposition, sex, 
+                          date, week, back_date, zone))
+
+## join 'newStretches' com 'eff'...
+## 'pontoporia' com as infos pros modelos
+## 'eff' sumarizado...
 
 # Environment data collection from ERA5 ####
 ##
