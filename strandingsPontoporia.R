@@ -64,11 +64,13 @@ levels(pontoporia$sex) <- list(female = "Fêmea",
 
 pontoporia$state <- as.factor(pontoporia$state)
 
-## Remove records from "state" == Rio de Janeiro & "cod_decomposition" == 5 
+## Remove records from "state" == Rio de Janeiro, "cod_decomposition" == 5,
+## and without date information "date_hour" == NA
 pontoporia <- 
   pontoporia %>% 
   dplyr::filter(state != "Rio de Janeiro") %>% 
-  dplyr::filter(cod_decomposition != 5)
+  dplyr::filter(cod_decomposition != 5) %>% 
+  dplyr::filter(!is.na(date_hour))
 
 ## Create column "date", "back_date", and "zone"
 ## for future environment variables gathering
@@ -306,7 +308,7 @@ originalStretches <- do.call(rbind, lines)
 
 originalStretches <- 
   dplyr::filter(originalStretches, compriment != 0) %>% 
-  dplyr::mutate(id_original = row_number()) %>% 
+  dplyr::mutate(id_original = dplyr::row_number()) %>% 
   sf::st_cast("MULTILINESTRING")
 
 originalStretches <- 
@@ -398,8 +400,13 @@ pontoporia <- dplyr::anti_join(pontoporia, eff_i, by = "DateBeach")
 
 ## Now we have just strandings collected on-effort, in complete-made stretches
 
+## To think about: regular / call
+# plyr::count(pontoporia$monitoring_type)
+## - - - - - - -  - - - -- -  - - - - -  - - - - - - -
+
 # 'pontoporia' spatial join with 'newStretches' [+ weeks] ####
 
+# New lat/long just to be used on the spatial join
 pontoporia <- 
   pontoporia %>% 
   dplyr::mutate(lat1 = lat,
@@ -413,13 +420,27 @@ pontoporiaSpatial <-
 pontoporiaSpatial1 <- sf::st_join(pontoporiaSpatial, newStretches, 
                                   join = sf::st_nearest_feature)
 
-## Returning it into a df format, cleaning some columns
-## and create a 'week' columns (integer number of the week ~ year)
+## Return it into a df format, clean some columns
+## and create "date~time" columns for future use
 pontoporia <- 
   pontoporiaSpatial1 %>% 
   as.data.frame() %>% 
+  
   dplyr::select(-c(beach, date_hour, DateBeach, geometry)) %>% 
-  dplyr::mutate(week = lubridate::week(date))
+  dplyr::mutate(year = lubridate::year(date), 
+                month = lubridate::month(date), 
+                week = lubridate::week(date)) %>% 
+  dplyr::mutate(year_N = 
+                  ifelse(year == 2015, "1", 
+                  ifelse(year == 2016 & month <= 8,"1", 
+                  ifelse(year == 2016 & month >= 9, "2", 
+                  ifelse(year == 2017 & month <= 8, "2", 
+                  ifelse(year == 2017 & month >= 9, "3", 
+                  ifelse(year == 2018 & month <= 8, "3", 
+                  ifelse(year == 2018 & month >= 9, "4", 
+                  ifelse(year == 2019 & month <= 8, "4", 
+                  ifelse(year == 2019 & month >= 9, "5", "5")))))))))) # %>% 
+#  dplyr::mutate(fortnight = )
 
 ## Just rearranging columns to a more logical order
 pontoporia <- 
@@ -430,11 +451,20 @@ pontoporia <-
                           id_polygon, id_newStretches, length, 
                           stretch_scheme, monitoring_type, 
                           cod_decomposition, sex, 
-                          date, week, back_date, zone))
+                          date, back_date, zone, 
+                          year_N, year, month, week)) # fortnight
 
-## join 'newStretches' com 'eff'...
-## 'pontoporia' com as infos pros modelos
-## 'eff' sumarizado...
+## join 'newStretches' com 'eff' ####
+eff_cSpatial <- sf::st_as_sf(eff_c,coords = c("initialLong", "initialLat"), 
+                             crs = 4326)
+eff_cSpatial1 <- sf::st_join(eff_cSpatial, newStretches,
+                             join = sf::st_nearest_feature)
+
+eff_c <- 
+  eff_cSpatial1 %>% 
+  as.data.frame()%>%
+  dplyr::select(-c(beach, DateBeach, geometry,city)) %>% 
+  dplyr::mutate(week = lubridate::week(initialDate))
 
 # Environment data collection from ERA5 ####
 ##
@@ -442,4 +472,17 @@ pontoporia <-
 ## files = {apiRequest.py} + {requirements.txt}
 ##
 
-###################
+# Next steps ####
+## summarized 'eff' to join with 'pontoporia'
+##
+## 'pontoporia' for models (join with Environmental data)
+##
+## final df for analysis
+df <- 
+  pontoporia %>% 
+  dplyr::group_by(id_polygon, year_N, "week | fortnight") %>% 
+  dplyr::summarise(y = n(),
+                   effort = (as.numeric(length) * (n(id_original))), digits = 1),
+                   #meanDist = mean((as.numeric(dist)/1000)),
+                   #meanTime = mean(as.numeric(time_lag)))
+
