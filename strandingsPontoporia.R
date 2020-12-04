@@ -404,7 +404,7 @@ pontoporia <- dplyr::anti_join(pontoporia, eff_i, by = "DateBeach")
 # plyr::count(pontoporia$monitoring_type)
 ## - - - - - - -  - - - -- -  - - - - -  - - - - - - -
 
-# 'pontoporia' spatial join with 'newStretches' [+ weeks] ####
+# 'pontoporia' spatial join with 'newStretches' [+ date~times] ####
 
 # New lat/long just to be used on the spatial join
 pontoporia <- 
@@ -425,7 +425,6 @@ pontoporiaSpatial1 <- sf::st_join(pontoporiaSpatial, newStretches,
 pontoporia <- 
   pontoporiaSpatial1 %>% 
   as.data.frame() %>% 
-  
   dplyr::select(-c(beach, date_hour, DateBeach, geometry)) %>% 
   dplyr::mutate(year = lubridate::year(date), 
                 month = lubridate::month(date), 
@@ -455,16 +454,37 @@ pontoporia <-
                           year_N, year, month, week)) # fortnight
 
 ## join 'newStretches' com 'eff' ####
-eff_cSpatial <- sf::st_as_sf(eff_c,coords = c("initialLong", "initialLat"), 
-                             crs = 4326)
-eff_cSpatial1 <- sf::st_join(eff_cSpatial, newStretches,
+
+eff_c <-  
+  eff %>% 
+  dplyr::filter(complete == "Sim")
+
+eff_cSpatial <- 
+  eff_c %>% 
+  sf::st_as_sf(coords = c("initialLong", "initialLat"), crs = 4326)
+
+eff_cSpatial <- sf::st_join(eff_cSpatial, newStretches, 
                              join = sf::st_nearest_feature)
 
 eff_c <- 
-  eff_cSpatial1 %>% 
-  as.data.frame()%>%
-  dplyr::select(-c(beach, DateBeach, geometry,city)) %>% 
-  dplyr::mutate(week = lubridate::week(initialDate))
+  eff_cSpatial %>% 
+  as.data.frame() %>% 
+  dplyr::mutate(date = lubridate::as_date(initialDate)) %>% 
+  dplyr::select(-c(city, beach, initialDate, geometry)) %>% 
+  dplyr::mutate(year = lubridate::year(date), 
+                month = lubridate::month(date), 
+                week = lubridate::week(date)) %>% 
+  dplyr::mutate(year_N = 
+                  ifelse(year == 2015, "1", 
+                  ifelse(year == 2016 & month <= 8,"1", 
+                  ifelse(year == 2016 & month >= 9, "2", 
+                  ifelse(year == 2017 & month <= 8, "2", 
+                  ifelse(year == 2017 & month >= 9, "3", 
+                  ifelse(year == 2018 & month <= 8, "3", 
+                  ifelse(year == 2018 & month >= 9, "4", 
+                  ifelse(year == 2019 & month <= 8, "4", 
+                  ifelse(year == 2019 & month >= 9, "5", "5")))))))))) # %>% 
+#  dplyr::mutate(fortnight = )
 
 # Environment data collection from ERA5 ####
 ##
@@ -473,11 +493,12 @@ eff_c <-
 ##
 
 # Next steps ####
-## summarized 'eff' to join with 'pontoporia'
+
+## summarized 'eff_c' to join with 'pontoporia'
 ##
 ## 'pontoporia' for models (join with Environmental data)
 ##
-## final df for analysis
+## final df for analysis -- will be something like this...
 df <- 
   pontoporia %>% 
   dplyr::group_by(id_polygon, year_N, "week | fortnight") %>% 
