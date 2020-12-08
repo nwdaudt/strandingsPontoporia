@@ -18,6 +18,7 @@
 
 # Libraries ####
 library(plyr)
+library(reshape2)
 library(tidyverse)
 library(mapview)
 library(sf)
@@ -453,7 +454,7 @@ pontoporia <-
                           date, back_date, zone, 
                           year_N, year, month, week)) # fortnight
 
-## join 'newStretches' com 'eff' ####
+# join 'newStretches' com 'eff' ####
 
 eff_c <-  
   eff %>% 
@@ -491,6 +492,58 @@ eff_c <-
 ## This step was based on a Python routine 
 ## files = {apiRequest.py} + {requirements.txt}
 ##
+
+# Wrangling environmental data ####
+
+## Open Pontoporia dataset
+envVariables <- as.data.frame(
+  utils::read.csv("./data/environmental_data/envVariables.csv"))
+
+## Remove id column
+envVariables <- envVariables %>% dplyr::select(-1)
+
+## Melt env variables
+envVariables_melt <- reshape2::melt(envVariables, id.vars = "fileName")
+
+## Extract only the info of interest (numeric part)
+envVariables_melt <- 
+  envVariables_melt %>% 
+  dplyr::mutate(value = gsub("dtype=float32", "", value)) %>% 
+  dplyr::mutate(value = gsub("<xarray.Variable", "", value)) %>% 
+  dplyr::mutate(value = gsub("[^0-9.-]", "", value)) %>% 
+  dplyr::mutate(value = as.numeric(value)) %>% 
+  dplyr::mutate(fileName = gsub("WTUVP", "", fileName)) %>% 
+  dplyr::mutate(fileName = gsub(".nc", "", fileName))
+
+## Return df to wide format
+envVariablesNew <- tidyr::spread(envVariables_melt, variable, value)
+
+## Set equal ID's prior to merge
+pontoporia$id_individual <- as.character(as.numeric(pontoporia$id_individual))
+envVariablesNew$fileName <- as.character(as.numeric(envVariablesNew$fileName))
+
+## Merge
+strandingAndEnv <- base::merge(pontoporia, envVariablesNew, 
+                         by.x = "id_individual", by.y = "fileName")
+
+## Renaming Env columns
+strandingAndEnv <- 
+  strandingAndEnv %>% 
+  dplyr::rename(u_wind = u10mean,
+                u_wind_min = u10min,
+                u_wind_max = u10max,
+                v_wind = v10mean,
+                v_wind_min = v10min,
+                v_wind_max = v10max,
+                mean_wave_dir = mwdmean,
+                mean_wave_dir_max = mwdmax,
+                mean_wave_dir_min = mwdmin,
+                mean_wave_period = mwpmean,
+                mean_wave_period_min = mwpmin,
+                mean_wave_peiod_max = mwpmax,
+                sig_height_wind_wave = shwwmean,
+                sig_height_wind_wave_min = shwwmin,
+                sig_height_wind_wave_max = shwwmax)
 
 # Next steps ####
 
