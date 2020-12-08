@@ -495,7 +495,7 @@ eff_c <-
 
 # Wrangling environmental data ####
 
-## Open Pontoporia dataset
+## Open environment variables dataset
 envVariables <- as.data.frame(
   utils::read.csv("./data/environmental_data/envVariables.csv"))
 
