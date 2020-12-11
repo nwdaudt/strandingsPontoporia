@@ -429,6 +429,7 @@ pontoporia <-
   dplyr::select(-c(beach, date_hour, DateBeach, geometry)) %>% 
   dplyr::mutate(year = lubridate::year(date), 
                 month = lubridate::month(date), 
+                day = lubridate::day(date),
                 week = lubridate::week(date)) %>% 
   dplyr::mutate(year_N = 
                   ifelse(year == 2015, "1", 
@@ -439,10 +440,27 @@ pontoporia <-
                   ifelse(year == 2018 & month <= 8, "3", 
                   ifelse(year == 2018 & month >= 9, "4", 
                   ifelse(year == 2019 & month <= 8, "4", 
-                  ifelse(year == 2019 & month >= 9, "5", "5")))))))))) # %>% 
-#  dplyr::mutate(fortnight = )
+                  ifelse(year == 2019 & month >= 9, "5", "5")))))))))) %>% 
+  dplyr::mutate(fortnight_month = as.numeric(
+                  ifelse(day <= 15, "1", "2"))) 
 
-## Just rearranging columns to a more logical order
+# Create a continuous id for fortnight periods through the year
+fortnight_df <- 
+  pontoporia %>% 
+  dplyr::select(id_individual, month, fortnight_month)
+
+fortnight_df <- 
+  fortnight_df %>% 
+  dplyr::group_by(month, fortnight_month) %>% 
+  dplyr::mutate(fortnight_id = dplyr::cur_group_id()) %>%
+  dplyr::ungroup() %>% 
+  dplyr::select(id_individual, fortnight_id)
+
+## Join 'fortnight_df' into 'pontoporia'
+pontoporia <- 
+  left_join(pontoporia, fortnight_df, by = "id_individual")
+
+## Rearranging columns
 pontoporia <- 
   pontoporia %>% 
   base::subset(select = c(id_individual, lat, long, 
@@ -452,7 +470,8 @@ pontoporia <-
                           stretch_scheme, monitoring_type, 
                           cod_decomposition, sex, 
                           date, back_date, zone, 
-                          year_N, year, month, week)) # fortnight
+                          year_N, year, month, day, fortnight_month,
+                          fortnight_id, week))
 
 # join 'newStretches' com 'eff' ####
 
@@ -474,6 +493,7 @@ eff_c <-
   dplyr::select(-c(city, beach, initialDate, geometry)) %>% 
   dplyr::mutate(year = lubridate::year(date), 
                 month = lubridate::month(date), 
+                day = lubridate::day(date),
                 week = lubridate::week(date)) %>% 
   dplyr::mutate(year_N = 
                   ifelse(year == 2015, "1", 
@@ -484,8 +504,25 @@ eff_c <-
                   ifelse(year == 2018 & month <= 8, "3", 
                   ifelse(year == 2018 & month >= 9, "4", 
                   ifelse(year == 2019 & month <= 8, "4", 
-                  ifelse(year == 2019 & month >= 9, "5", "5")))))))))) # %>% 
-#  dplyr::mutate(fortnight = )
+                  ifelse(year == 2019 & month >= 9, "5", "5")))))))))) %>% 
+  dplyr::mutate(fortnight_month = 
+                  ifelse(day <= 15, "1", "2"))
+
+## Create a continuous id for fortnight periods through the year
+fortnight_df_eff <- 
+  eff_c %>% 
+  dplyr::select(code, month, fortnight_month)
+
+fortnight_df_eff <- 
+  fortnight_df_eff %>% 
+  dplyr::group_by(month, fortnight_month) %>% 
+  dplyr::mutate(fortnight_id = dplyr::cur_group_id()) %>%
+  dplyr::ungroup() %>% 
+  dplyr::select(code, fortnight_id)
+
+## Join 'fortnight_df' into 'pontoporia'
+eff_c <- 
+  left_join(eff_c, fortnight_df_eff, by = "code")
 
 # Environment data collection from ERA5 ####
 ##
