@@ -83,7 +83,7 @@ pontoporia <-
                                                       date - 6))) %>% 
   dplyr::mutate(zone = 
                   ifelse(lat > -23.75, "1", 
-                         ifelse(lat < -23.75 & lat > -26, "2", "3")))
+                  ifelse(lat < -23.75 & lat > -26, "2", "3")))
 
 ## PS - "zones" were defined based on summaries related to mean drifting 
 ## distances from the 'drift_experiment'.
@@ -110,10 +110,9 @@ drift$date_s <- lubridate::dmy(drift$date_s)
 drift <- 
   drift %>% 
   dplyr::mutate(
-    zoneExp = 
-      ifelse(lat_r > -23.8, "1", 
-             ifelse(lat_r < -23.8 & lat_r > -24.4,"2", 
-                    ifelse(lat_r < -24.4 & lat_r > -26, "3", "4"))))
+    zoneExp = ifelse(lat_r > -23.8, "1", 
+              ifelse(lat_r < -23.8 & lat_r > -24.4,"2", 
+              ifelse(lat_r < -24.4 & lat_r > -26, "3", "4"))))
 
 drift$zoneExp <- as.factor(drift$zoneExp)
 
@@ -182,7 +181,7 @@ driftDistTime <-
 driftSummary_ID_Campaign <- 
   driftDistTime %>% 
   dplyr::group_by(campaign, id) %>% 
-  dplyr::summarise(n = n(),
+  dplyr::summarise(n = n(), 
                    n_percentage = round(((n()/33)*100), digits = 1), 
                    meanDist = mean((as.numeric(dist)/1000)), 
                    sdDist = sd((as.numeric(dist)/1000)), 
@@ -411,22 +410,19 @@ pontoporia <-
   pontoporiaSpatial1 %>% 
   as.data.frame() %>% 
   dplyr::select(-c(beach, date_hour, geometry)) %>% 
+  dplyr::filter(date > "2015-08-31" & date < "2020-06-07") %>% 
   dplyr::mutate(year = lubridate::year(date), 
                 month = lubridate::month(date), 
                 day = lubridate::day(date),
                 week = lubridate::week(date)) %>% 
-  dplyr::mutate(year_N = 
-                  ifelse(year == 2015, "1", 
-                  ifelse(year == 2016 & month <= 8,"1", 
-                  ifelse(year == 2016 & month >= 9, "2", 
-                  ifelse(year == 2017 & month <= 8, "2", 
-                  ifelse(year == 2017 & month >= 9, "3", 
-                  ifelse(year == 2018 & month <= 8, "3", 
-                  ifelse(year == 2018 & month >= 9, "4", 
-                  ifelse(year == 2019 & month <= 8, "4", 
-                  ifelse(year == 2019 & month >= 9, "5", "5")))))))))) %>% 
+  dplyr::mutate(year_n = 
+                  ifelse(date > "2015-08-31" & date < "2016-09-01", "Year1",
+                  ifelse(date > "2016-08-31" & date < "2017-09-01", "Year2",
+                  ifelse(date > "2017-08-31" & date < "2018-09-01", "Year3",
+                  ifelse(date > "2018-08-31" & date < "2019-09-01", "Year4",
+                                                                    "Year5"))))) %>% 
   dplyr::mutate(fortnight_month = as.numeric(
-                  ifelse(day <= 15, "1", "2"))) 
+                  ifelse(day <= 15, "1", "2")))
 
 # Create a continuous id for fortnight periods through the year
 fortnight_df <- 
@@ -442,7 +438,7 @@ fortnight_df <-
 
 ## Join 'fortnight_df' into 'pontoporia'
 pontoporia <- 
-  left_join(pontoporia, fortnight_df, by = "id_individual")
+  dplyr::left_join(pontoporia, fortnight_df, by = "id_individual")
 
 ## Rearranging columns
 pontoporia <- 
@@ -454,10 +450,10 @@ pontoporia <-
                           stretch_scheme, monitoring_type, 
                           cod_decomposition, sex, 
                           date, back_date, zone, 
-                          year_N, year, month, day, fortnight_month,
+                          year_n, year, month, day, fortnight_month,
                           fortnight_id, week))
 
-# anti_join between 'eff' and 'pontoporia' ####
+# anti_join between 'eff_i' and 'pontoporia' ####
 
 eff_i <- 
   eff %>% 
@@ -503,21 +499,18 @@ eff_c <-
   eff_cSpatial %>% 
   as.data.frame() %>% 
   dplyr::mutate(date = lubridate::as_date(initialDate)) %>% 
-  dplyr::select(-c(city, beach, initialDate, geometry)) %>% 
+  dplyr::select(-c(city, beach, initialDate, geometry)) %>%  
+  dplyr::filter(date > "2015-08-31" & date < "2020-06-07") %>% 
   dplyr::mutate(year = lubridate::year(date), 
                 month = lubridate::month(date), 
                 day = lubridate::day(date), 
                 week = lubridate::week(date)) %>% 
-  dplyr::mutate(year_N = 
-                  ifelse(year == 2015, "1", 
-                  ifelse(year == 2016 & month <= 8,"1", 
-                  ifelse(year == 2016 & month >= 9, "2", 
-                  ifelse(year == 2017 & month <= 8, "2", 
-                  ifelse(year == 2017 & month >= 9, "3", 
-                  ifelse(year == 2018 & month <= 8, "3", 
-                  ifelse(year == 2018 & month >= 9, "4", 
-                  ifelse(year == 2019 & month <= 8, "4", 
-                  ifelse(year == 2019 & month >= 9, "5", "5")))))))))) %>% 
+  dplyr::mutate(year_n = 
+                  ifelse(date > "2015-08-31" & date < "2016-09-01", "Year1", 
+                  ifelse(date > "2016-08-31" & date < "2017-09-01", "Year2", 
+                  ifelse(date > "2017-08-31" & date < "2018-09-01", "Year3", 
+                  ifelse(date > "2018-08-31" & date < "2019-09-01", "Year4", 
+                                                                    "Year5"))))) %>% 
   dplyr::mutate(fortnight_month = 
                   ifelse(day <= 15, "1", "2"))
 
@@ -535,7 +528,7 @@ fortnight_df_eff <-
 
 ## Join 'fortnight_df' into 'pontoporia'
 eff_c <- 
-  left_join(eff_c, fortnight_df_eff, by = "code")
+  dplyr::left_join(eff_c, fortnight_df_eff, by = "code")
 
 # Environment data collection from ERA5 ####
 ##
@@ -605,13 +598,13 @@ strandingAndEnv <-
 ## Per 'fortnight'
 df_eff_fortnight <- 
   eff_c %>% 
-  dplyr::group_by(id_polygon, year_N, fortnight_id) %>% 
+  dplyr::group_by(id_polygon, year_n, fortnight_id) %>% 
   summarise(effort = as.numeric(sum(length)))
 
 ## Per 'week'
 df_eff_week <- 
   eff_c %>% 
-  dplyr::group_by(id_polygon, year_N, week) %>% 
+  dplyr::group_by(id_polygon, year_n, week) %>% 
   summarise(effort = as.numeric(sum(length)))
 
 #
@@ -622,7 +615,7 @@ df_eff_week <-
 ## Per 'fortnight'
 df_fortnight <- 
   strandingAndEnv %>% 
-  dplyr::group_by(id_polygon, year_N, fortnight_id) %>% 
+  dplyr::group_by(id_polygon, year_n, fortnight_id) %>% 
   dplyr::summarise(y = n(),
                    u_wind = mean(u_wind, na.rm = T), 
                    v_wind = mean(v_wind, na.rm = T), 
@@ -633,7 +626,7 @@ df_fortnight <-
 df_final_fortnight <- 
   df_eff_fortnight %>% 
   dplyr::left_join(df_fortnight, 
-                   by = c("id_polygon", "year_N", "fortnight_id")) %>% 
+                   by = c("id_polygon", "year_n", "fortnight_id")) %>% 
   dplyr::mutate(y = tidyr::replace_na(y, 0))
 
 # hist(df_final_fortnight$y)
@@ -642,7 +635,7 @@ df_final_fortnight <-
 ## Per 'week'
 df_week <- 
   strandingAndEnv %>% 
-  dplyr::group_by(id_polygon, year_N, week) %>% 
+  dplyr::group_by(id_polygon, year_n, week) %>% 
   dplyr::summarise(y = n(),
                    u_wind = mean(u_wind, na.rm = T), 
                    v_wind = mean(v_wind, na.rm = T), 
@@ -653,7 +646,7 @@ df_week <-
 df_final_week <- 
   df_eff_week %>% 
   dplyr::left_join(df_week, 
-                   by = c("id_polygon", "year_N", "week")) %>% 
+                   by = c("id_polygon", "year_n", "week")) %>% 
   dplyr::mutate(y = tidyr::replace_na(y, 0))
 
 # hist(df_final_week$y)
