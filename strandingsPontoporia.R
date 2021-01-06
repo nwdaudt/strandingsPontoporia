@@ -83,7 +83,7 @@ pontoporia <-
                                                       date - 6))) %>% 
   dplyr::mutate(zone = 
                   ifelse(lat > -23.75, "1", 
-                         ifelse(-23.75 > lat & lat > -26, "2", "3")))
+                         ifelse(lat < -23.75 & lat > -26, "2", "3")))
 
 ## PS - "zones" were defined based on summaries related to mean drifting 
 ## distances from the 'drift_experiment'.
@@ -110,12 +110,12 @@ drift$date_s <- lubridate::dmy(drift$date_s)
 drift <- 
   drift %>% 
   dplyr::mutate(
-    zone = 
+    zoneExp = 
       ifelse(lat_r > -23.8, "1", 
-             ifelse(-23.8 > lat_r & lat_r > -24.4,"2", 
-                    ifelse(-24.4 > lat_r & lat_r > -26, "3", "4"))))
+             ifelse(lat_r < -23.8 & lat_r > -24.4,"2", 
+                    ifelse(lat_r < -24.4 & lat_r > -26, "3", "4"))))
 
-drift$zone <- as.factor(drift$zone)
+drift$zoneExp <- as.factor(drift$zoneExp)
 
 ## Transform df into a geospatial feature
 driftSpatial <- 
@@ -133,7 +133,7 @@ pontoporiaMapview <- # Run this line to add visualization into a df
 
 ## Mapview Release Stations from drift_experiment
 driftReleaseStationsMapview <- # Run this line to add visualization into a df
-  mapview::mapview(driftSpatial, zcol = "zone")
+  mapview::mapview(driftSpatial, zcol = "zoneExp")
 
 ## Mapview isobath 30m
 isobath30Mapview <- # Run this line to add visualization into a df
@@ -151,18 +151,18 @@ rm(pontoporiaSpatial, driftSpatial,
 ## between (r)elease and (s)tranding
 driftSpatial_r <- 
   drift %>% 
-  dplyr::select(campaign,id,(ends_with("r"))) %>% 
+  dplyr::select(campaign, id, (ends_with("r"))) %>% 
   sf::st_as_sf(coords = c("long_r", "lat_r"), crs = 4326)
 
 driftSpatial_s <- 
   drift %>% 
-  dplyr::select(campaign,id,(ends_with("s"))) %>% 
+  dplyr::select(campaign, id, (ends_with("s"))) %>% 
   sf::st_as_sf(coords = c("long_s", "lat_s"), crs = 4326)
 
 ## Calculate distance and time between 'r' and 's'
 driftDistTime <- 
   drift %>% 
-  dplyr::select(campaign, id, state, zone, 
+  dplyr::select(campaign, id, state, zoneExp, 
                 date_r, date_s, 
                 lat_r, long_r, 
                 lat_s, long_s) %>% 
@@ -173,32 +173,38 @@ driftDistTime <-
 #
 ## Summaries
 
+# - - - - -
+# Each campaign had 33 buoys releases
+# For each State, n total was 297
+# State == 33(per campaign) * 3(release stations = "drift$id") * 3(campaigns) 
+# - - - - -
+
 driftSummary_ID_Campaign <- 
   driftDistTime %>% 
   dplyr::group_by(campaign, id) %>% 
   dplyr::summarise(n = n(),
-                   n_percentage = round(((n()/33)*100), digits = 1),
-                   meanDist = mean((as.numeric(dist)/1000)),
-                   sdDist = sd((as.numeric(dist)/1000)),
-                   minDist = min((as.numeric(dist)/1000)),
-                   maxDist = max((as.numeric(dist)/1000)),
-                   meanTime = mean(as.numeric(time_lag)),
-                   sdTime = sd(as.numeric(time_lag)),
-                   minTime = min(as.numeric(time_lag)),
+                   n_percentage = round(((n()/33)*100), digits = 1), 
+                   meanDist = mean((as.numeric(dist)/1000)), 
+                   sdDist = sd((as.numeric(dist)/1000)), 
+                   minDist = min((as.numeric(dist)/1000)), 
+                   maxDist = max((as.numeric(dist)/1000)), 
+                   meanTime = mean(as.numeric(time_lag)), 
+                   sdTime = sd(as.numeric(time_lag)), 
+                   minTime = min(as.numeric(time_lag)), 
                    maxTime = max(as.numeric(time_lag)))
 
 driftSummary_State <- 
   driftDistTime %>% 
   dplyr::group_by(state) %>% 
   dplyr::summarise(n = n(),
-                   n_percentage = round(((n()/297)*100), digits = 1),
-                   meanDist = mean((as.numeric(dist)/1000)),
-                   sdDist = sd((as.numeric(dist)/1000)),
-                   minDist = min((as.numeric(dist)/1000)),
-                   maxDist = max((as.numeric(dist)/1000)),
-                   meanTime = mean(as.numeric(time_lag)),
-                   sdTime = sd(as.numeric(time_lag)),
-                   minTime = min(as.numeric(time_lag)),
+                   n_percentage = round(((n()/297)*100), digits = 1), 
+                   meanDist = mean((as.numeric(dist)/1000)), 
+                   sdDist = sd((as.numeric(dist)/1000)), 
+                   minDist = min((as.numeric(dist)/1000)), 
+                   maxDist = max((as.numeric(dist)/1000)), 
+                   meanTime = mean(as.numeric(time_lag)), 
+                   sdTime = sd(as.numeric(time_lag)), 
+                   minTime = min(as.numeric(time_lag)), 
                    maxTime = max(as.numeric(time_lag)))
 
 ## Summaries from less than 10 days drifting
@@ -207,44 +213,44 @@ driftSummary_ID_Campaign_10 <-
   driftDistTime %>% 
   dplyr::filter(time_lag < 10) %>% 
   dplyr::group_by(campaign, id) %>% 
-  dplyr::summarise(n = n(),
-                   n_percentage = round(((n()/33)*100), digits = 1),
-                   meanDist = mean((as.numeric(dist)/1000)),
-                   sdDist = sd((as.numeric(dist)/1000)),
-                   minDist = min((as.numeric(dist)/1000)),
-                   maxDist = max((as.numeric(dist)/1000)),
-                   meanTime = mean(as.numeric(time_lag)),
-                   sdTime = sd(as.numeric(time_lag)),
-                   minTime = min(as.numeric(time_lag)),
+  dplyr::summarise(n = n(), 
+                   n_percentage = round(((n()/33)*100), digits = 1), 
+                   meanDist = mean((as.numeric(dist)/1000)), 
+                   sdDist = sd((as.numeric(dist)/1000)), 
+                   minDist = min((as.numeric(dist)/1000)), 
+                   maxDist = max((as.numeric(dist)/1000)), 
+                   meanTime = mean(as.numeric(time_lag)), 
+                   sdTime = sd(as.numeric(time_lag)), 
+                   minTime = min(as.numeric(time_lag)), 
                    maxTime = max(as.numeric(time_lag)))
 
 driftSummary_State_10 <- 
   driftDistTime %>% 
   dplyr::filter(time_lag < 10) %>% 
   dplyr::group_by(state) %>% 
-  dplyr::summarise(n = n(),
-                   n_percentage = round(((n()/297)*100), digits = 1),
-                   meanDist = mean((as.numeric(dist)/1000)),
-                   sdDist = sd((as.numeric(dist)/1000)),
-                   minDist = min((as.numeric(dist)/1000)),
-                   maxDist = max((as.numeric(dist)/1000)),
-                   meanTime = mean(as.numeric(time_lag)),
-                   sdTime = sd(as.numeric(time_lag)),
-                   minTime = min(as.numeric(time_lag)),
+  dplyr::summarise(n = n(), 
+                   n_percentage = round(((n()/297)*100), digits = 1), 
+                   meanDist = mean((as.numeric(dist)/1000)), 
+                   sdDist = sd((as.numeric(dist)/1000)), 
+                   minDist = min((as.numeric(dist)/1000)), 
+                   maxDist = max((as.numeric(dist)/1000)), 
+                   meanTime = mean(as.numeric(time_lag)), 
+                   sdTime = sd(as.numeric(time_lag)), 
+                   minTime = min(as.numeric(time_lag)), 
                    maxTime = max(as.numeric(time_lag)))
 
 driftSummary_Zone_10 <-  ## This was the basis for "zones" in 'pontoporia' df.
   driftDistTime %>% 
   dplyr::filter(time_lag < 10) %>% 
-  dplyr::group_by(zone) %>% 
-  dplyr::summarise(n = n(),
-                   meanDist = mean((as.numeric(dist)/1000)),
-                   sdDist = sd((as.numeric(dist)/1000)),
-                   minDist = min((as.numeric(dist)/1000)),
-                   maxDist = max((as.numeric(dist)/1000)),
-                   meanTime = mean(as.numeric(time_lag)),
-                   sdTime = sd(as.numeric(time_lag)),
-                   minTime = min(as.numeric(time_lag)),
+  dplyr::group_by(zoneExp) %>% 
+  dplyr::summarise(n = n(), 
+                   meanDist = mean((as.numeric(dist)/1000)), 
+                   sdDist = sd((as.numeric(dist)/1000)), 
+                   minDist = min((as.numeric(dist)/1000)), 
+                   maxDist = max((as.numeric(dist)/1000)), 
+                   meanTime = mean(as.numeric(time_lag)), 
+                   sdTime = sd(as.numeric(time_lag)), 
+                   minTime = min(as.numeric(time_lag)), 
                    maxTime = max(as.numeric(time_lag)))
 
 ## Plot time x days
@@ -256,30 +262,27 @@ rm(driftSpatial_r, driftSpatial_s,
 # Keep 'driftSummary_Zone_10' for easiest check, if needed
 
 # Effort - split monitored beach segments based on sectors polygon ####
-ef_SP <- read.csv2("data/Effort_SP_aug2019_jul_2020.csv",
+ef_SP <- read.csv2("data/Effort_SP_aug2019_jul_2020.csv", 
                    header = TRUE, encoding = "UTF-8")
-ef_SC_PR <- read.csv2("data/Effort_SC_PR_aug2019_jul_2020.csv",
+ef_SC_PR <- read.csv2("data/Effort_SC_PR_aug2019_jul_2020.csv", 
                       header = TRUE, encoding = "UTF-8")
-ef_SP_PR_SC <- read.csv2("data/Effort_SC_PR_SP_aug2015_aug_2019.csv",
+ef_SP_PR_SC <- read.csv2("data/Effort_SC_PR_SP_aug2015_aug_2019.csv", 
                          header = TRUE, encoding = "UTF-8")
 
-eff <- rbind(ef_SP,ef_SC_PR,ef_SP_PR_SC)
+eff <- rbind(ef_SP, ef_SC_PR, ef_SP_PR_SC)
 
 rm(list = ls(pattern = "ef_"))
 
 ## Split data and hour
 eff$initialDate <- lubridate::dmy(
   sapply(strsplit(as.character(eff$Data.Hora.início), " "), "[", 1))
-eff$initialTime <- 
-  sapply(strsplit(as.character(eff$Data.Hora.início), " "), "[", 2)
 
 ## Removing unused columns
-eff[c(2:3,10:12,15:16)] <- list(NULL) 
+eff[c(2:3, 10:12, 15:16)] <- list(NULL)
 
 ## Rename columns
-colnames(eff) <- c("code","state","city","beach","stretch","type","strategy",
-                   "initialLat","initialLong",
-                   "complete", "initialDate", "initialTime")
+colnames(eff) <- c("code", "state", "city", "beach", "stretch", "type", "strategy", 
+                   "initialLat", "initialLong", "complete", "initialDate")
 
 # write.table(eff, "./data/Effort_complete.txt", dec = ".", sep = ";")
 
@@ -372,7 +375,7 @@ newStretches$id_newStretches <- 1:nrow(newStretches)
 ## Calculate individual segment lengths
 newStretches$length <- sf::st_length(newStretches)
 
-## Cleaning 'newStretches' df
+## Clean 'newStretches' df
 newStretches <- 
   newStretches %>% 
   dplyr::select(id_polygon, 
@@ -385,25 +388,6 @@ newStretches <-
                 geometry) %>% 
   sf::st_as_sf() %>% 
   sf::st_set_crs(4326)
-
-# anti_join between 'eff' and 'pontoporia' ####
-
-eff_i <- 
-  eff %>% 
-  dplyr::filter(complete != "Sim") %>% 
-  dplyr::mutate(DateBeach = paste(initialDate, beach)) # ID for anti_join
-
-pontoporia <- 
-  pontoporia %>% 
-  dplyr::mutate(DateBeach = paste(date, beach)) # ID for anti_join
-
-pontoporia <- dplyr::anti_join(pontoporia, eff_i, by = "DateBeach")
-
-## Now we have just strandings collected on-effort, in complete-monitored stretches
-
-## To think about: regular / call
-# plyr::count(pontoporia$monitoring_type)
-## - - - - - - -  - - - -- -  - - - - -  - - - - - - -
 
 # 'pontoporia' spatial join with 'newStretches' [+ date~times] ####
 
@@ -426,7 +410,7 @@ pontoporiaSpatial1 <- sf::st_join(pontoporiaSpatial, newStretches,
 pontoporia <- 
   pontoporiaSpatial1 %>% 
   as.data.frame() %>% 
-  dplyr::select(-c(beach, date_hour, DateBeach, geometry)) %>% 
+  dplyr::select(-c(beach, date_hour, geometry)) %>% 
   dplyr::mutate(year = lubridate::year(date), 
                 month = lubridate::month(date), 
                 day = lubridate::day(date),
@@ -473,7 +457,36 @@ pontoporia <-
                           year_N, year, month, day, fortnight_month,
                           fortnight_id, week))
 
-# Join 'newStretches' com 'eff' ####
+# anti_join between 'eff' and 'pontoporia' ####
+
+eff_i <- 
+  eff %>% 
+  dplyr::filter(complete != "Sim")
+
+eff_iSpatial <- 
+  eff_i %>% 
+  sf::st_as_sf(coords = c("initialLong", "initialLat"), crs = 4326)
+
+eff_iSpatial <- sf::st_join(eff_iSpatial, newStretches, 
+                            join = sf::st_nearest_feature)
+
+eff_i <- 
+  eff_iSpatial %>% 
+  dplyr::mutate(DateBeach = paste(initialDate, id_newStretches)) # ID for anti_join
+
+pontoporia <- 
+  pontoporia %>% 
+  dplyr::mutate(DateBeach = paste(date, id_newStretches)) # ID for anti_join
+
+pontoporia <- dplyr::anti_join(pontoporia, eff_i, by = "DateBeach")
+
+## Now we have just strandings collected on-effort, in complete-monitored stretches
+
+## To think about: regular / call
+# plyr::count(pontoporia$monitoring_type)
+## - - - - - - -  - - - -- -  - - - - -  - - - - - - -
+
+# Join 'newStretches' com 'eff_c' ####
 
 eff_c <-  
   eff %>% 
