@@ -1,5 +1,5 @@
 ## Code for: 
-## Fransiscana dolphin 'Pontoporia blainvillei' strandings in 
+## Fransiscana dolphin 'Pontoporia blainvillei' stranding patterns in 
 ## southeast-south Brazil, Fransiscana Management Area (FMA) II, 
 ## between 2015-2020
 ## 
@@ -83,7 +83,7 @@ pontoporia <-
                                                       date - 6))) %>% 
   dplyr::mutate(zone = 
                   ifelse(lat > -23.75, "1", 
-                         ifelse(-23.75 > lat & lat > -26,"2", "3")))
+                         ifelse(-23.75 > lat & lat > -26, "2", "3")))
 
 ## PS - "zones" were defined based on summaries related to mean drifting 
 ## distances from the 'drift_experiment'.
@@ -267,16 +267,16 @@ eff <- rbind(ef_SP,ef_SC_PR,ef_SP_PR_SC)
 
 rm(list = ls(pattern = "ef_"))
 
-# split data and hour
+## Split data and hour
 eff$initialDate <- lubridate::dmy(
   sapply(strsplit(as.character(eff$Data.Hora.início), " "), "[", 1))
 eff$initialTime <- 
   sapply(strsplit(as.character(eff$Data.Hora.início), " "), "[", 2)
 
-# Removing unused columns
+## Removing unused columns
 eff[c(2:3,10:12,15:16)] <- list(NULL) 
 
-# Rename columns
+## Rename columns
 colnames(eff) <- c("code","state","city","beach","stretch","type","strategy",
                    "initialLat","initialLong",
                    "complete", "initialDate", "initialTime")
@@ -337,14 +337,14 @@ sectorsPolygon <- sf::st_sf(sectorsPolygon)
 # Create an identifier for each sector
 sectorsPolygon$id_polygon <- 1:nrow(sectorsPolygon)
 
-# Define sectorsPolygon as a multipolygon
+## Define sectorsPolygon as a multipolygon
 sectorsPolygon <- 
   sectorsPolygon %>% 
   sf::st_cast("MULTIPOLYGON")
 
 # mapview::mapview(sectorsPolygon)
 
-# Create a multiline feature based on 'sectorsPolygon' id limits
+## Create a multiline feature based on 'sectorsPolygon' id limits
 sectorsPolygon_lines <- sf::st_cast(sectorsPolygon, "MULTILINESTRING", 
                              group_or_split = FALSE)
 
@@ -355,7 +355,7 @@ sectorsPolygon_lines <- sf::st_cast(sectorsPolygon, "MULTILINESTRING",
 ## the monitored beaches 'originalStretches'
 ## Cut features and calculate each segment length, for calculate effort (km)
 
-# Calculate intersection between 'originalStretches' and 'sectorsPolygon'
+## Calculate intersection between 'originalStretches' and 'sectorsPolygon'
 newStretches <- 
   sf::st_intersection(originalStretches, sectorsPolygon)
 
@@ -364,7 +364,7 @@ newStretches <-
   newStretches %>% 
   sf::st_cast("LINESTRING")
 
-# Add a new id for each segment line, called "id_newStretches"
+## Add a new id for each segment line, called "id_newStretches"
 newStretches$id_newStretches <- 1:nrow(newStretches)
 
 # mapview::mapview(newStretches) + sectorsPolygon_lines
@@ -399,7 +399,7 @@ pontoporia <-
 
 pontoporia <- dplyr::anti_join(pontoporia, eff_i, by = "DateBeach")
 
-## Now we have just strandings collected on-effort, in complete-made stretches
+## Now we have just strandings collected on-effort, in complete-monitored stretches
 
 ## To think about: regular / call
 # plyr::count(pontoporia$monitoring_type)
@@ -407,13 +407,13 @@ pontoporia <- dplyr::anti_join(pontoporia, eff_i, by = "DateBeach")
 
 # 'pontoporia' spatial join with 'newStretches' [+ date~times] ####
 
-# New lat/long just to be used on the spatial join
+## New lat/long just to be used in the spatial join
 pontoporia <- 
   pontoporia %>% 
   dplyr::mutate(lat1 = lat,
                 long1 = long)
 
-# Update 'pontoporiaSpatial'
+## Update 'pontoporiaSpatial'
 pontoporiaSpatial <- 
   sf::st_as_sf(pontoporia, coords = c("long1", "lat1"), crs = 4326)
 
@@ -473,7 +473,7 @@ pontoporia <-
                           year_N, year, month, day, fortnight_month,
                           fortnight_id, week))
 
-# join 'newStretches' com 'eff' ####
+# Join 'newStretches' com 'eff' ####
 
 eff_c <-  
   eff %>% 
@@ -493,7 +493,7 @@ eff_c <-
   dplyr::select(-c(city, beach, initialDate, geometry)) %>% 
   dplyr::mutate(year = lubridate::year(date), 
                 month = lubridate::month(date), 
-                day = lubridate::day(date),
+                day = lubridate::day(date), 
                 week = lubridate::week(date)) %>% 
   dplyr::mutate(year_N = 
                   ifelse(year == 2015, "1", 
@@ -516,7 +516,7 @@ fortnight_df_eff <-
 fortnight_df_eff <- 
   fortnight_df_eff %>% 
   dplyr::group_by(month, fortnight_month) %>% 
-  dplyr::mutate(fortnight_id = dplyr::cur_group_id()) %>%
+  dplyr::mutate(fortnight_id = dplyr::cur_group_id()) %>% 
   dplyr::ungroup() %>% 
   dplyr::select(code, fortnight_id)
 
@@ -526,7 +526,7 @@ eff_c <-
 
 # Environment data collection from ERA5 ####
 ##
-## This step was based on a Python routine 
+## This step was done through a Python routine 
 ## files = {apiRequest.py} + {requirements.txt}
 ##
 
@@ -553,7 +553,9 @@ envVariables_melt <-
   dplyr::mutate(fileName = gsub(".nc", "", fileName))
 
 ## Return df to wide format
-envVariablesNew <- tidyr::spread(envVariables_melt, variable, value)
+envVariablesNew <- tidyr::pivot_wider(envVariables_melt, 
+                                      names_from = variable, 
+                                      values_from = value)
 
 ## Set equal ID's prior to merge
 pontoporia$id_individual <- as.character(as.numeric(pontoporia$id_individual))
@@ -582,18 +584,66 @@ strandingAndEnv <-
                 sig_height_wind_wave_min = shwwmin,
                 sig_height_wind_wave_max = shwwmax)
 
-# Next steps ####
+# Summarize "effort" and join 'strandingAndEnv' ####
 
-## summarized 'eff_c' to join with 'pontoporia'
-##
-## 'pontoporia' for models (join with Environmental data)
-##
-## final df for analysis -- will be something like this...
-df <- 
-  pontoporia %>% 
-  dplyr::group_by(id_polygon, year_N, "week | fortnight") %>% 
+#
+## Summarized 'eff_c' to join the "effort" and 'strandingAndEnv'
+
+## Per 'fortnight'
+df_eff_fortnight <- 
+  eff_c %>% 
+  dplyr::group_by(id_polygon, year_N, fortnight_id) %>% 
+  summarise(effort = as.numeric(sum(length)))
+
+## Per 'week'
+df_eff_week <- 
+  eff_c %>% 
+  dplyr::group_by(id_polygon, year_N, week) %>% 
+  summarise(effort = as.numeric(sum(length)))
+
+#
+## Final df for analysis (but see next step)
+
+# Remove "na.rm = T" from 'summarise' after finish Env data
+
+## Per 'fortnight'
+df_fortnight <- 
+  strandingAndEnv %>% 
+  dplyr::group_by(id_polygon, year_N, fortnight_id) %>% 
   dplyr::summarise(y = n(),
-                   effort = (as.numeric(length) * (n(id_original))), digits = 1),
-                   #meanDist = mean((as.numeric(dist)/1000)),
-                   #meanTime = mean(as.numeric(time_lag)))
+                   u_wind = mean(u_wind, na.rm = T), 
+                   v_wind = mean(v_wind, na.rm = T), 
+                   mean_wave_dir = mean(mean_wave_dir, na.rm = T), 
+                   mean_wave_period = mean(mean_wave_period, na.rm = T), 
+                   sig_height_wind_wave = mean(sig_height_wind_wave, na.rm = T))
 
+df_final_fortnight <- 
+  df_eff_fortnight %>% 
+  dplyr::left_join(df_fortnight, 
+                   by = c("id_polygon", "year_N", "fortnight_id")) %>% 
+  dplyr::mutate(y = tidyr::replace_na(y, 0))
+
+# hist(df_final_fortnight$y)
+# plyr::count(df_final_fortnight$y)
+
+## Per 'week'
+df_week <- 
+  strandingAndEnv %>% 
+  dplyr::group_by(id_polygon, year_N, week) %>% 
+  dplyr::summarise(y = n(),
+                   u_wind = mean(u_wind, na.rm = T), 
+                   v_wind = mean(v_wind, na.rm = T), 
+                   mean_wave_dir = mean(mean_wave_dir, na.rm = T), 
+                   mean_wave_period = mean(mean_wave_period, na.rm = T), 
+                   sig_height_wind_wave = mean(sig_height_wind_wave, na.rm = T))
+
+df_final_week <- 
+  df_eff_week %>% 
+  dplyr::left_join(df_week, 
+                   by = c("id_polygon", "year_N", "week")) %>% 
+  dplyr::mutate(y = tidyr::replace_na(y, 0))
+
+# hist(df_final_week$y)
+# plyr::count(df_final_week$y)
+
+# Fill zero stranding "y = 0" with new environmental data ####
