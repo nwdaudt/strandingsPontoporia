@@ -1,0 +1,774 @@
+---
+title: "Relatório técnico"
+author: ''
+date: "07/01/2021"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+  word_document: default
+geometry: left=2.5cm,right=2.5cm,top=2cm,bottom=2cm
+fontsize: 12pt
+---
+
+```{r setup, include=FALSE}
+options(width = 60)
+matrix(runif(100), ncol = 20)
+knitr::opts_chunk$set(fig.height=12,
+                      fig.width = 12,error = TRUE,eval=T,
+                      cache = T,message=FALSE,warning = FALSE,
+                      fig.align ='c',tidy.opts=list(width.cutoff=60),tidy=TRUE,echo=F)
+
+## Libraries
+library(readxl)
+library(plyr)
+library(tidyverse)
+library(sf)
+library(gamlss)
+library(ggspatial)
+library(captioner)
+
+## Open dataset
+table1 <- 
+  utils::read.csv("./results/table1.csv", sep = ";",dec=",")
+table2 <- 
+  utils::read.csv("./results/table2.csv", sep = ";",dec=",")
+table3A <- 
+  utils::read.csv("./results/table3A.csv", sep = ";",dec=",")
+table3B <- 
+  utils::read.csv("./results/table3B.csv", sep = ";",dec=",")
+table4A <- 
+  utils::read.csv("./results/table4A.csv", sep = ";",dec=",")
+table4B <- 
+  utils::read.csv("./results/table4B.csv", sep = ";",dec=",")
+table5 <- 
+  utils::read.csv("./results/table5.csv", sep = ";",dec=",")
+table6 <- 
+  utils::read.csv("./results/table6.csv", sep = ";",dec=",")
+pontoporiaVSfishing <-
+  utils::read.csv("./data_out/pontoporiaVSfishing.csv",sep=";",dec=",")
+pontoporiaVSfishingTotal <-
+  utils::read.csv("./data_out/pontoporiaVSfishingTotal.csv",sep=";",dec=",")
+driftSpatial <-
+  sf::read_sf(dsn="./data_out",layer = "driftSpatialFinal")
+
+## Open shapefiles
+brazil <- 
+  sf::read_sf(dsn = "./shape", layer = "brasil") %>% 
+  sf::st_set_crs(4326)
+
+isobath <- 
+  sf::st_read("./shape/linhas_lim_200m.shp")
+
+originalStretchesFinal <-
+  sf::read_sf(dsn="./data_out",layer = "originalStretchesFinal")
+
+originalStretchesFinal <- 
+  sf::st_transform(originalStretchesFinal, crs = 4326)
+
+originalStretchesBuffer <-
+sf::read_sf(dsn="./data_out",layer = "originalStretchesBuffer")
+
+sectorsPolygon_linesFinal <-
+  sf::read_sf(dsn="./data_out",layer = "sectorsPolygon_linesFinal")
+```
+
+  Esta consultoria é referente a prestação de serviços técnicos de modelagem ecológica dos encalhes de toninha (*Pontoporia blainvillei*) na Área de Manejo da Toninha II (FMAII) em face do projeto "Aspectos socioambientais da pesca e de capturas acidentais: uma avaliação em prol da gestão integrada e conservação da toninha na área de manejo II".
+
+#   1. Objetivo
+
+  Avaliar o efeito de variáveis ambientais e antrópicas no encalhe de toninhas ao longo da FMA II e porção norte da FMA III e predizer os locais de mortalidade para esta região a partir de modelo oceanográfico de deriva de carcaça.
+ 
+#   2. Produto
+
+- Organização dos bancos de dados;
+- Modelo ecológico das áreas de incidência de encalhe de toninhas e relação destas com variáveis oceanográficas e geomorfológicas;
+- Análises quanto a relação dos modelos de encalhe com dados espaço-temporal de esforço pesqueiro;
+- Mapas de distribuição espaço-temporal dos encalhes de toninha para SP, PR e SC;
+- Análises ecológicas integrando os modelos de encalhe de toninha com os modelos de deriva das carcaças;
+- Estimativa a mortalidade de toninhas em ao menos três áreas da FMA II, se viável;
+- Disponibilização da metodologia e resultados em formato de artigo; 
+- Disponibilização do banco de dados gerados em formatos próprios (ex. shape.file , scripts R);
+- Participação em reuniões técnicas (virtuais) referentes ao Projeto TONINHA quando convocado.
+
+#   3. Introdução
+    
+  O encalhe pode ser definido como a presença de animais marinhos encontrados vivos na praia ou que morreram no mar e eventualmente são transportados para costa. Quando morto, tanto por causas naturais ou antrópicas, tender a encalhar na costa adjacente. Portanto, o monitoramento sistemático dos encalhes é uma importante fonte de informação sobre a biologia, a ecologia e a conservação das espécies marinhas.  
+  O Projeto de Monitoramento de Praia da Bacia de Santos PMP-BS foi estabelecido em 2015 para o atendimento da condicionante do licenciamento ambiental federal das atividades da Petrobrás de produção e escoamento de petróleo e gás natural no Polo Pré-Sal da Bacia de Santos. Este projeto consiste no monitoramento das praias para o registro, a coleta e o atendimento veterinário das aves, tartarugas e mamíferos marinhos encalhados nas praias dos estados de Santa Catarina, Paraná, São Paulo.   
+  Através do PMP-BS uma série de informações vem sendo obtidas de várias espécies, incluindo a toninha, um pequeno golfinho endêmico do Oceano Atlântico Sul Ocidental. Devido a sua característica costeira, habitando preferencialmente regiões até 30 m de profundidade,  capturas acidentais em redes de emalhe são a principal ameaça a sua conservação. Em decorrência dos altos níveis de mortalidade observados nas quatro Áreas de Manejo da Toninha (FMAs) (CORCUERA, 1994; SECCHI *et al*., 1997; DI BENEDITTO & RAMOS, 2001; BERTOZZI & ZERBINI, 2002; ROSAS, MONTEIRO-FILHO & OLIVEIRA, 2002; CAPPOZZO *et al*., 2007; FRANCO-TRECU *et al*., 2009, PRADO *et al*. 2016), ela encontra-se atualmente incluída na categoria de "Vulnerável" no Livro Vermelho de Espécies Ameaçadas da União Internacional para a Conservação da Natureza (IUCN, 2010) e "criticamente em perigo de extinção" na lista nacional da fauna brasileira ameaçada de extinção (MMA, 2014).  
+  De maneira geral, as toninhas capturadas acidentalmente em redes de emalhe são descartadas ao mar. Devido à proximidade com a costa, uma parcela tende a encalhar na praia. Desta forma, a variabilidade espaço-temporal dos encalhes de toninha pode ser utilizada para obter informações a respeito da mortalidade por pesca.  
+  A modelagem estatística vem sendo utilizada para compreender os fatores que contribuem para o encalhe de vertebrados marinhos (ex. PRADO *et al*. 2016, MONTEIRO *et al*. 2016, CANTOR *et al*. 2020). A partir dos modelos de regressão é possível associar variáveis ambientais e/ou antrópicas que possam explicar a variabilidade dos encalhes. Além da modelagem estatística, os dados de encalhe, quando associados a dados provenientes de modelos oceanográficos de deriva de partículas (que viabilizam simular carcaças), podem ser utilizados para predizer áreas de hostspot de mortalidade (PELTIER *et al*., 2012). Além disso, a partir do número de animais encalhados nas praias e, da probabilidade de uma toninha morta acidentalmente encalhar na costa, pode-se estimar a mortalidade acidental proveniente da atividade de pesca (PRADO *et al*., 2013).  
+  A coleta sistemática de dados de encalhe associada a períodos de médio e longo prazo são extremamente relevantes para obtenção de informações a respeito do padrão de mortalidade de vertebrados marinhos. O uso de longas séries temporais de dados reduz o efeito dos encalhes atípicos e permite a distinção entre padrões regulares e aleatórios (PRADO *et al*. 2016).  
+  Desde 2015 o PMP-BS vem realizando monitoramentos diários de praia, desde Laguna, Santa Catarina, até São Sebastião, São Paulo, totalizando aproximadamente 800 km de praia monitorada. Além desse trecho corresponder boa parte da área de distribuição da toninha na costa brasileira, o monitoramento diário aumenta a probabilidade de detecção da carcaça e permite saber a data em que o animal encalhou na praia. Estas informações são importantes, pois geram dados mais precisos em relação aos encalhes. A relevância desses dados é acentuada uma vez que as estimativas de capturas acidentais de toninhas provenientes do monitoramento da frota de emalhe para a FMA II e norte da FMA III estão restritas a poucas comunidades de pesca (CREMER, SIMÕES-LOPES & DIEFENBACH, 1995; BERTOZZI & ZERBINI, 2002; ROSAS, MONTEIRO-FILHO & OLIVEIRA, 2002; BERTOZZI, 2009).  
+  A análise da variabilidade dos dados de encalhe do PMP-BS, associada a outros conjuntos de dados (ex. modelos de deriva e probabilidade de encalhe) serão fundamentais para auxiliar à conservação da espécie.
+
+#   4. Material e métodos
+
+##  4.1 Dados de encalhe e de esforço de monitoramento
+
+  Os dados de encalhe de toninha foram obtidos através do Sistema de Informação de Monitoramento da Biota Marinha operacionalizado pelo Projeto de Monitoramento de Praia da Bacia de Santos (PMP-BS). Este monitoramento é realizado desde Laguna (SC) (lat long) até São Sebastião (SP) (lat long) (Figura 1) por meio de protocolo padronizado. Os dados de encalhe analisados correspondem ao período entre 01/setembro/2015 e 07/junho/2020, totalizando aproximadamente cinco anos de dados. As praias com estratégia de monitoramento por "acionamento" e os monitoramentos "incompletos" foram excluídos das análises. 
+
+```{r Figura 1, echo = FALSE,fig.cap = "Trecho de costa monitorado pelo Programa de Monitoramento de Praia da Bacia de Santos PMP-BS. A linha em vermelho refere-se as praias com estratégia de monitoramento diário, semanal e quinzenal"}
+
+## Figura 1. Study area
+figure1 <- 
+  ggplot() + 
+  ggspatial::geom_sf(data = brazil) +
+  geom_sf(data = originalStretchesFinal, color = "red", show.legend = F) + 
+  labs(x = "Longitude", y = "Latitude") + 
+  coord_sf(xlim = c(-50.5, -44), ylim = c(-28.5, -23)) + 
+  theme_bw() + 
+  theme(axis.title = element_text(colour = "black", size = 20), 
+        axis.text = element_text(colour = "black", size = 16), 
+        axis.line = element_line(colour = "black")) + 
+  annotation_scale(location = "br", width_hint = 0.3,
+                   text_cex = 1.3,height = unit(0.3, "cm")) +
+  annotation_north_arrow(location = "br", which_north = "true", 
+                         pad_x = unit(0.8, "in"), pad_y = unit(0.3, "in"),
+                         style = north_arrow_fancy_orienteering,
+                         height = unit(3, "cm"),width = unit(3, "cm")) + 
+  annotate(geom = "text", x = -46, y = -26, label = "Atlantic Ocean", 
+           color = "grey22", size = 8) +
+  annotate(geom = "text", x = -47.5, y = -23.58, label = "São Paulo", 
+           color = "grey22", size = 8) +
+  annotate(geom = "text", x = -49.8, y = -25, label = "Paraná", 
+           color = "grey22", size = 8) +
+  annotate(geom = "text", x = -49.8, y = -27.3, label = "Santa Catarina", 
+           color = "grey22", size = 8)
+figure1
+```
+
+  Os registros de encalhes georreferenciados a mais de 300 m da linha de costa; classificados com grau de decomposição (COD) 5; e por acionamento em praias com monitoramento semanal e quinzenal foram excluídos das análises. Somente os registros por acionamento em praias com monitoramento diário foram considerados. Este procedimento foi adotado, pois a carcaça poderia ser identificada pela equipe do PMP-BS, no mesmo dia ou no dia seguinte, caso o acionamento não fosse concluído.
+  
+  Para avaliar o padrão temporal dos encalhes entre anos, criou-se uma variável categórica "ano" considerando o início das coletas do PMP-BS: Ano1 (setembro2015/agosto2016), Ano2 (setembro 2016/agosto2017), Ano3 (setembro2017/agosto2018), Ano4 (setembro2018/agosto2019) e Ano5 (setembro2019/junho2020). Para verificar a sazonalidade, as estações foram divididas em verão (janeiro a março), outono (abril a junho), inverno (julho a setembro) e primavera (outubro a dezembro). Em relação ao padrão espacial, os encalhes foram agrupados em 30 faixas latitudinais de xx graus de latitude (doravante denominados de polígonos), que por sua vez foram agrupados em 8 mesorregiões (Figura 2). Estas mesorregiões foram baseadas no Atlas de Sensibilidade Ambiental ao Óleo da Bacia Marítima de Santos (MMA 2007) que define 8 regiões com características geomorfológicas, oceanográficas e biológicas distintas. Este agrupamento foi realizado com o objetivo de incluir uma estrutura de autocorrelação espacial nos modelos de regressão (ver seção modelagem). O detalhamento de como este agrupamento foi realizado esta descrito no arquivo (XXXXXXX.R).     
+
+```{r figure2,echo = FALSE, fig.cap="Divisão da área de estudo em 30 faixas latitudinais de xx graus de latitude (polígono em preto) e em oito mesorregiões. A linha em vermelho refere-se as praias monitoradas pelo Programa de Monitoramento de Praia da Bacia de Santos PMP-BS."}
+
+figure2 <- 
+  ggplot() + 
+  ggspatial::geom_sf(data = brazil) + 
+  geom_sf(data = originalStretchesFinal, 
+          color = "red", show.legend = F) + 
+  geom_sf(data = sectorsPolygon_linesFinal , 
+          show.legend = T,aes(color = mesrgns)) + 
+  scale_colour_brewer(palette="Oranges",name="Mesorigions",
+                      limits=c("Litoral Norte Paulista","Litoral Central Paulista","Litoral Sul Paulista","Litoral Paranaense","Litoral Norte Catarinense","Litoral Centro-Norte Catarinense","Litoral Central Catarinense", "Litoral Sul Catarinense"))+
+  labs(x = "Longitude", y = "Latitude") + 
+  coord_sf(xlim = c(-50.5, -44), ylim = c(-28.5, -23)) + 
+  theme_bw() + 
+  theme(axis.title = element_text(colour = "black", size = 20), 
+        axis.text = element_text(colour = "black", size = 16), 
+        axis.line = element_line(colour = "black"),
+        legend.text = element_text(colour = "black", size = 12),
+        legend.title = element_text(colour = "black", size = 14)) + 
+  annotation_scale(location = "br", width_hint = 0.3,
+                   text_cex = 1.3,height = unit(0.3, "cm"),
+                   pad_x = unit(0.1, "in"), pad_y = unit(0.05, "in")) + 
+  annotation_north_arrow(location = "br", which_north = "true", 
+                         pad_x = unit(0.10, "in"), pad_y = unit(0.2, "in"),
+                         style = north_arrow_fancy_orienteering,
+                         height = unit(3, "cm"),width = unit(3, "cm")) + 
+  annotate(geom = "text", x = -46, y = -26, label = "Atlantic Ocean", 
+           color = "grey22", size = 8) + 
+  annotate(geom = "text", x = -47.5, y = -23.20, label = "São Paulo", 
+           color = "grey22", size = 8) + 
+  annotate(geom = "text", x = -49.8, y = -25, label = "Paraná", 
+           color = "grey22", size = 8) + 
+  annotate(geom = "text", x = -49.8, y = -27.3, label = "Santa Catarina", 
+           color = "grey22", size = 8)
+
+figure2
+```
+
+##  4.2 Experimento de deriva
+
+  O experimento de deriva consistiu na liberação de derivadores identificados (tocos de madeiras) em pontos predeterminados da costa de Santa Catarina, Paraná e São Paulo para auxiliar na compreensão do transporte de carcaças  de toninhas mortas nessas regiões. Para cada um dos três estados foram escolhidos três pontos de lançamento em Santa Catarina e Paraná e dois em São Paulo, estabelecidos próximos à isóbata de 20 m. Em cada ponto foram liberados 33 derivadores durante três campanhas, totalizando 297 derivadores (Tabela 1). Única diferença foi na campanha3/estaçãoC1 onde foram liberados 30 derivadores (Tabela 1).
+
+```{r figure3, echo=FALSE,results='hide',fig.keep='all', fig.cap="Região de lançançamento dos derivadores. A linha em preto refere-se a isóbata de 20m. O poligono em vermelho representa as três zonas."}
+
+## Isobath 20m
+iso20 <-
+  isobath%>%
+  dplyr::filter(ELEV == 20)
+
+figure3 <-      
+  ggplot() + 
+  ggspatial::geom_sf(data = brazil) + 
+  ggspatial::geom_sf(data = iso20) + 
+  ggspatial::geom_sf(data = driftSpatial, aes(color = RlsSttn), 
+                     show.legend = T) + 
+  coord_sf(xlim = c(-50.5, -44), ylim = c(-28.5, -23)) + 
+  labs(x = "Longitude", y = "Latitude") + 
+  theme_bw() + 
+  theme(legend.title=element_text( 
+                                  family="Times", colour="black",size=14)) +
+  theme(axis.title = element_text(colour = "black", size = 14), 
+        axis.text = element_text(colour = "black", size = 16), 
+        axis.line = element_line(colour = "black")) + 
+   scale_colour_discrete(name="Região de lançamento")+
+  guides(fill=guide_legend(label.theme=
+  element_text(family="Times", colour="black", size=22)))+
+  annotation_scale(location = "br", width_hint = 0.3,
+                   text_cex = 1.3,height = unit(0.3, "cm")) +
+  annotation_north_arrow(location = "br", which_north = "true", 
+                         pad_x = unit(0.8, "in"), pad_y = unit(0.3, "in"),
+                         style = north_arrow_fancy_orienteering,
+                         height = unit(3, "cm"),width = unit(3, "cm")) + 
+  annotate(geom = "text", x = -46, y = -26, label = "Atlantic Ocean", 
+           color = "grey22", size = 8) +
+  annotate(geom = "text", x = -47.5, y = -23.58, label = "São Paulo", 
+           color = "grey22", size = 8) +
+  annotate(geom = "text", x = -49.8, y = -25, label = "Paraná", 
+           color = "grey22", size = 8) +
+  annotate(geom = "text", x = -49.8, y = -27.3, label = "Santa Catarina", 
+           color = "grey22", size = 8) +
+  ggplot2::geom_rect(data = brazil, 
+                     aes(xmin = -44,5, xmax = -49, ymin = -23.75, ymax = -23.4), 
+                     colour = "red", fill = "NA") + 
+  ggplot2::geom_rect(data = brazil, 
+                     aes(xmin = -44,5, xmax = -49, ymin = -26.2, ymax = -23.75), 
+                     colour = "red", fill = "NA") + 
+  ggplot2::geom_rect(data = brazil, 
+                     aes(xmin = -44,5, xmax = -49, ymin = -28.6, ymax = -26.2), 
+                     colour = "red", fill = "NA") +
+  annotate(geom = "text", x = -44.4, y = -23.58, label = "Zona 1", 
+           color = "red", size = 5) +
+  annotate(geom = "text", x = -44.4, y = -25, label = "Zona 2", 
+           color = "red", size = 5) +
+  annotate(geom = "text", x = -44.4, y = -27.3, label = "Zona 3", 
+           color = "red", size = 5)
+figure3
+```
+
+  Para avaliar a distância média entre o ponto de lançamento e o ponto de encalhe dos derivadores (menor distância entre pontos), os pontos de lançamento foram agrupados em quatro regiões: 'Região 1' ao norte da Ilha de São Sebastião (SP); 'Região 2' ao sul da Ilha de São Sebastião (SP); 'Região 3' ao largo da costa do PR; e 'Região 4' ao sul de Santa Catarina (Figura 3).
+
+```{r table1,echo=FALSE}
+knitr::kable(
+  table1, longtable = TRUE, booktabs = TRUE,col.names = c("Campaign", "State", "Release position","No. drifters","Date", "Lat", "Long","Release station"),
+  caption = 'Número de derivadores lançados por campanha e estação de lançamento para Santa Catarina (SC), Paraná (PR) e São Paulo (SP). A última coluna refere-se as quatro zonas criadas para avaliar a distância de deriva dos detivadores (referente as Zonas no texto principal).',align = "c")
+```
+ 
+  A distância média para cada região foi calculada considerando dois procedimentos: 1) sem estipular o limite máximo de tempo de deriva para o encalhe dos derivadores; 2) estipulando o limite máximo de 10 dias. No segundo caso, somente os devivadores que levaram até 10 dias para encalhar foram utilizados para calcular a distância média.  Este procedimento foi adotado, pois o processo de decomposição de uma carcaça de toninha poderia inviabilizar o encalhe após 10 dias.  Este resultado foi utilizado para definir a resolução do polígono para a obtenção das variáveis preditoras (ver seção: Variáveis preditoras).
+
+## 4.3 Variáveis preditoras
+
+  Três variáveis preditoras foram utilizadas para modelar os registros de encalhe: direção e intensidade do vento, período de onda e dias de pesca. As três primeiras foram obtidas através dos dados de reanalise globais do ERA5. Estes dados possuem uma resolucao espacial de XXX e temporal de 6h.(JÉSSICA ACHO QUE AQUI CABERIA UMA INFORMAÇÃO BEM BREVE SOBRE O BANCO DE DADOS).
+  
+  A associação entre os dados de encalhe e as variáveis preditoras foi realizada da seguinte forma. O primeiro passo consistiu em associar cada registro de encalhe às variáveis preditoras. Para tanto foi necessário definir a resolução do polígono ao redor de cada registro de encalhe onde as variáveis seriam obtidas. Este polígono representa a provável área de sobreposição entre as variáveis preditoras e o local de ocorrência do espécime no momento da sua morte. Em virtude de não termos a informação do local onde cada toninha foi morta e da sua trajetória até o encalhe, a resolução do polígono foi baseada na distância média de deriva dos derivadores nas quatro regiões. Em virtude da Região 1 e 4 terem apresentado valores similares de distância média e máxima de deriva, assim como observado entre a Região 2 e 3 (ver Tabela 4, em resultados), dois polígonos foram propostos: polígono 1 e poligono 2, respectivamente (**Figura...JÉSSICA, VC PODERIA FAZER UMA FIGURA REPRESENTANDO ESTES OS DOIS POLÍGONOS, PLOTANDO-OS NO MAPA?**). A partir desse resultado os registros de encalhe foram agrupados em três zonas: Zona 1 e 3 utilizou-se o polígono 1 e a Zona 2 o polígono 2 para a obtensão das variáveis preditoras (Figura 3). O limite entre as três zonas foi baseado na distância da isóbata de 20 m em relação à linha de costa. 
+ 
+  Uma vez definido a resolução do polígono, o próximo passo foi estabelecer o intervalo de tempo (número de dias) antes da ocorrência do encalhe para obter a média das variáveis preditoras. Esse procedimento foi baseado no grau de decomposição da carcaça: intervalo de dois dias para carcaças COD2 e sete dias para COD3 e COD4.   
+  
+  Com essas informacoes adicionadas a tabela de encalhes, os dados foram baixados atraves de uma rotina em python a qual gera uma conexao nova com o API da plataforma ERA para cada encalhe. O codigo atualiza o intervalo temporal e espacial de acordo que sera informado com o  onde as datas iniciais e finais assim como a cobertura espacial 'sao especificas para cada encalhe.   
+  
+  A variável dias de pesca foi obtida a partir dos relatórios da atividade pesqueira artesanal do Programa de Monitoramento da Atividade Pesqueira – PMAP-BS. Com base nesses relatórios os dados foram georreferenciados e consolidados por semestre em grids de 4 x 4 mn, considerando-se o ponto médio de cada classe desta variável.
+  
+  Após a obtenção das variáveis preditoras para cada registro de encalhe o passo seguinte consistiu na sumarização dos dados por polígono e quinzena. Para aquelas combinações em que o número de encalhe foi maior do que zero, considerou-se a média das variáveis preditoras referente a cada registro de encalhe. Para aquelas combinações sem registros de encalhes, considerou-se um encalhe fictício no centro de cada polígono e obteve-se a média quinzenal das variáveis ambientais.        
+
+## 4.4 Análise dos dados
+  A variabilidade espaço-temporal dos encalhes foi avaliada através do número de toninhas encalhadas a cada 1000 km de praia percorrido (taxa de encalhe). Este procedimento foi realizado em virtude do esforço de monitoramento ser diferente ao longo das 30 faixas latitudinais. 
+  Estimativa de densidade de kernel foi utilizada para verificar os locais com maior densidade de encalhes de toninha. Para isso utililizou-se uma largura de banda (*bandwidth*) de 0.05 graus. Para considerar o esforço de monitoramento diferenciado ao longo da área de estudo, utilizou o inverso do número de monitoramentos realizado em cada um dos pontos de encalhe como parametro de entrada (.  
+  
+  
+
+### 4.4.1 Análise de kernel
+
+### 4.4.2 Correlação espacial entre dos dados de encalhes e de esforço de pesca
+
+### 4.4.3 Modelagem dos registros de encalhe
+
+## 4.5 Identificação das áreas de mortalidade
+
+# 5. Resultados
+
+## 5.1 Resultados Gerais
+
+### 5.1.1 Experimento de deriva
+  O número total de derivadores lançados foi 888, dos quais 342 (38%) encalharam na costa (Tabela 2). A proporção se manteve praticamente a mesma entre os três estados: Paraná 40% (n = 118); Santa Catarina 37% (n = 108) e São Paulo 39% (n = 116) (Tabela 3). A distância média de deriva foi maior nás áreas de lançamento 1, 2 e 3 (aproximadamente 55km), seguida pela área 4 (21km) (Tabela 4).  
+  Ao considerar os derivadores que encalharam em menos de 10 dias, São Paulo obteve a maior porcentagem de encalhe (34%; n = 102), seguida por Santa Catarina (30%; n = 89) e Paraná (19%; n = 56) (Tabela 3). A maior distância média de deriva foi observada na Região 3 (71 km; n = 56), seguida pela Região 2 (45 km; n = 88), Região 1 (15 km; n = 14) e Região 4 (12 km; n = 89) (Tabela 4).    
+
+\newpage
+
+````{r table2,echo = FALSE}
+knitr::kable(
+  table2, longtable = TRUE, booktabs = TRUE, col.names = c("Campaign", "State", "ID","Released","Stranded","Percentage","mean","sd","min","max","mean","sd",	"min","max"),caption = 'Sumário dos resultados referente ao experimento de deriva por campanha, estação de lançamento (ID) e estado.',align = "c") %>%
+  kableExtra::add_header_above(c(" " = 6,"Distance" =  4, "Time" = 4)) 
+````
+
+```{r table 3,echo=FALSE}
+knitr::kable(
+  list(table3A, table3B), longtable = T, booktabs = T, col.names = c("Sate","Released","Stranded","Percentage"),
+  caption = 'Número de derivadores lançados e encontrados na praia por estado. As três últimas linhas referem-se aos derivadores encalhados em menos de 10 dias',align = "c")
+```
+
+```{r table4, echo=FALSE}
+knitr::kable(
+  list(table4A,table4B), longtable = T, booktabs = T,col.names = 
+c("Region","Released","Stranded","Percentage","meanDist","sdDist","minDist","maxDist","meanTime","sdTime",	"minTime","maxTime"),
+  caption = 'Sumário dos resultados do experimento de deriva por zona. As quatro últimas linhas referem-se ao derivadores encalhados em menos de 10 dias.',align = "c") 
+```
+
+### 5.1.2 Encalhes
+
+  Do total de praias monitoradas pelo PMP-BS, 374 apresentaram estratégia de monitoramento diário e semanal, totalizando 821 km de costa monitorada (Tabela 5). Durante o período analisado 1.129.277 km de praia foram percorridos, com uma média de 37.642 km (dp = 22.743) por polígono (Tabela 5). O número médio de monitoramentos por polígono foi de 1405 (dp = 282) (Tabela 6). O número total de encalhes foi 1709 (vivos = 17; mortos = 1692), com 70% dos registros classificados em grau de decomposição 4 (n = 1193) (Tabela 5). A maior taxa de encalhe foi observada no polígono 10 (próximo a Itajaí, SC) e a menor no polígono 23 (próximo a Barra do Ribeira, SP) (Tabela 5).
+
+````{r table5,echo = FALSE}
+knitr::kable(
+  table5, longtable = T, booktabs = TRUE,col.names = c("Polygon", "Nr of beaches","Stretch polygon (km)","Total beach surveyed (km)","Mean  number of beach survey","1","2","3","4","Total stranding","Stranding rate"), 
+  caption = 'Sumário dos resultados referente ao esforço de monitoramento e número de encalhes de toninha por polígono.',align = "c",digits = 2) %>%
+ kableExtra::add_header_above(c(" " = 5,"Stage of decomposition" =  4, " " = 2)) %>%
+ kableExtra::add_header_above(c(" " = 1,"Effort" =  4, "Stranding" = 6)) %>%
+ kableExtra::kable_styling(font_size = 12)
+````
+
+  O padrão temporal dos encalhes apresentou pouca variabilidade entre os anos, com uma taxa anual média de encalhe de 1,5 animais (dp = 0.17) (Tabela 6, Figura 5). As maiores taxas de encalhe foram observadas na primavera e no inverno e as menores no outono e no verão (Figura 5). Em relação ao padrão espacial também se observou pouca variação entre os anos e entre os meses, com as maiores taxas de encalhe observadas entre os polígonos 7-14 e 23-29 (Figuras 6 e 7). 
+
+````{r table6, echo = FALSE}
+knitr::kable(
+  table6, longtable = TRUE, booktabs = TRUE,col.names = c("Year","Total beach surveyed (km)","Total strandings","Stranding rate"),
+  caption = 'Taxa anual de encalhe de toninha.',align = "c",digits = 2)
+````
+
+```{r figure5,echo=FALSE, fig.cap = "Taxa de encalhe de toninha por estação, mês, quinzena e semana."}
+
+# Open dataset
+dfSeason <- 
+  utils::read.csv2("./data_out/ponSeasonFinal.csv")
+dfMonth <- 
+  utils::read.csv2("./data_out/ponMonthFinal.csv")
+dfFortnight <- 
+  utils::read.csv2("./data_out/ponFortnightFinal.csv")
+dfWeek <- 
+  utils::read.csv2("./data_out/ponWeekFinal.csv")
+
+##
+## Temporal pattern
+##
+
+## Per "Season"
+
+strRateSeason <- 
+  dfSeason %>%
+  dplyr::group_by(season, year_n) %>% 
+  dplyr::summarise(effort_km = sum(effort_km), y = sum(y)) %>%
+  dplyr::mutate(str_rate = as.numeric(y*1000/effort_km))
+
+str_rate_season_plot <-
+  ggplot(strRateSeason, aes(x = season, y = str_rate, fill = year_n)) +
+  geom_bar(stat = "identity", position = "dodge")+
+  scale_fill_brewer(palette = "Pastel1") + 
+  guides(fill = guide_legend(reverse = TRUE)) +
+  xlab("Season") + ylab("Stranding rate (ind./1000 km)") + 
+  theme(legend.position = "right") +
+  theme(legend.title = element_blank()) + 
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(), 
+        panel.background = element_blank()) + 
+  theme(axis.text.x = element_text(size = 10),
+        axis.text.y = element_text(size = 10)) + 
+  theme(panel.border = element_rect(colour = "black", fill = NA)) + 
+  theme(axis.title.x = element_text(size = 10),
+        axis.title.y = element_text(size = 10))+
+  theme(strip.text.x = element_text(size = 18, face = "italic"))
+
+## Per "month"
+
+# Create the column "monthf", gruop by monthf and create the column "srt_rate" 
+dfMonthf <-
+  dfMonth %>%
+  dplyr::mutate(monthf = 
+                  factor(month, levels = as.character(1:12), 
+                         labels = c("Jan", "Feb", "Mar", "Apr", "May", "Jun", 
+                                    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"),
+                         ordered = FALSE)) %>% 
+  dplyr::relocate(monthf, .before = "month")%>%
+  dplyr::mutate(monthf = as.factor(monthf)) %>%
+  dplyr::group_by(year_n, monthf) %>%
+  dplyr::summarise(y = sum(y), effort_km = sum(effort_km)) %>% 
+  dplyr::mutate(str_rate = as.numeric(y*1000/effort_km))
+
+str_rate_month_plot <- 
+  ggplot2::ggplot(dfMonthf, aes(x = monthf, y = str_rate, group = year_n)) + 
+  geom_line(aes(color = year_n)) + 
+  xlab("Month") + ylab("Stranding rate (ind./1000 km)") + 
+  theme(legend.position = "NULL") +
+  theme(legend.title = element_blank()) + 
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(), 
+        panel.background = element_blank()) + 
+  theme(axis.text.x = element_text(size = 10),
+        axis.text.y = element_text(size = 10)) + 
+  theme(panel.border = element_rect(colour = "black", fill = NA)) + 
+  theme(axis.title.x = element_text(size = 10),
+        axis.title.y = element_text(size = 10))+
+  theme(strip.text.x = element_text(size = 18, face = "italic"))
+
+## Per "fortnight"
+
+strRateFortnight <- 
+  dfFortnight %>%
+  dplyr::group_by(fortnight_id, year_n) %>% 
+  dplyr::summarise(effort_km = sum(effort_km), y = sum(y)) %>%
+  dplyr::mutate(str_rate = as.numeric (y*1000/effort_km))
+
+str_rate_fortnight_plot <-
+  ggplot2::ggplot(strRateFortnight , 
+                  aes(x = fortnight_id, y = str_rate, group = year_n)) + 
+  geom_line(aes(color = year_n)) + 
+  xlab("Fortnight") + ylab("Stranding rate (ind./1000 km)") + 
+  theme(legend.position = "right") +
+  theme(legend.title = element_blank()) + 
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(), 
+        panel.background = element_blank()) + 
+  theme(axis.text.x = element_text(size = 10),
+        axis.text.y = element_text(size = 10)) + 
+  theme(panel.border = element_rect(colour = "black", fill = NA)) + 
+  theme(axis.title.x = element_text(size = 10),
+        axis.title.y = element_text(size = 10))+
+  theme(strip.text.x = element_text(size = 18, face = "italic"))
+
+## Per "week"
+
+strRateWeek <- 
+  dfWeek %>%
+  dplyr::group_by(week, year_n) %>% 
+  dplyr::summarise(effort_km = sum(effort_km), y = sum(y)) %>%
+  dplyr::mutate(str_rate = as.numeric(y*1000/effort_km))
+
+str_rate_week_plot <-
+  ggplot2::ggplot(strRateWeek, 
+                  aes(x = week, y = str_rate, group = year_n)) + 
+  geom_line(aes(color = year_n)) +
+  xlab("Week") + ylab("Stranding rate (ind./1000 km)") + 
+  theme(legend.position = "NULL") +
+  theme(legend.title = element_blank()) + 
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(), 
+        panel.background = element_blank()) + 
+  theme(axis.text.x = element_text(size = 10), 
+        axis.text.y = element_text(size = 10)) + 
+  theme(panel.border = element_rect(colour = "black", fill = NA)) + 
+  theme(axis.title.x = element_text(size = 10), 
+        axis.title.y = element_text(size = 10))+
+  theme(strip.text.x = element_text(size = 18, face = "italic"))
+
+figure5 <- 
+  gridExtra::grid.arrange(str_rate_month_plot,str_rate_fortnight_plot,
+                          str_rate_week_plot,str_rate_season_plot,ncol = 2)
+```
+
+```{r figure6, echo = FALSE,fig.cap="Taxa de encalhe de toninha por polígono para cada ano."}
+
+# Open dataset
+dfMonth <- 
+  utils::read.csv2("./data_out/ponMonthFinal.csv")
+
+##
+## Spatial pattern
+##
+
+dfMonth$id_polygon <- as.factor(dfMonth$id_polygon)
+
+# Per year
+strRatePoly <- 
+  dfMonth %>% 
+  dplyr::group_by(id_polygon, year_n) %>% 
+  dplyr::summarise(effort_km = sum(effort_km), y = sum(y)) %>%
+  dplyr::mutate(str_rate = as.numeric(y*1000/effort_km))
+
+figure6 <-
+  ggplot2::ggplot(strRatePoly, 
+                  aes(x = id_polygon, y = str_rate, group = year_n)) + 
+  geom_line(aes(color = year_n)) + 
+  xlab("Polygon") + ylab("Stranding rate (ind./1000 km)")+ 
+  theme(legend.position = "right") +
+  theme(legend.title = element_blank()) + 
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(), 
+        panel.background = element_blank()) + 
+  theme(axis.text.x = element_text(size = 10),
+        axis.text.y = element_text(size = 10))+ 
+  theme(panel.border = element_rect(colour = "black", fill = NA))+ 
+  theme(axis.title.x = element_text(size = 10),
+        axis.title.y = element_text(size = 10))+
+  theme(strip.text.x = element_text(size = 18, face = "italic"))
+
+figure6
+```
+
+```{r figure7,echo = FALSE, fig.cap= "Taxa de encalhe de toninha por polígono para cada mês."}
+
+# Open dataset
+dfMonth <- 
+  utils::read.csv2("./data_out/ponMonthFinal.csv")
+
+##
+## Per polygon
+##
+
+dfMonth$month<- as.factor(dfMonth$month)
+
+strRatePoly <- 
+  dfMonth %>% 
+  dplyr::mutate(monthf = 
+                  factor(month, levels = as.character(1:12), 
+                         labels = c("Jan", "Feb", "Mar", "Apr", "May", "Jun", 
+                                    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"),
+                         ordered = FALSE)) %>%
+  dplyr::group_by(id_polygon, monthf) %>% 
+  dplyr::summarise(effort_km = sum(effort_km), y = sum(y)) %>%
+  dplyr::mutate(str_rate = as.numeric(y*1000/effort_km))
+
+figure7 <-
+  ggplot2::ggplot(strRatePoly, 
+                  aes(x = id_polygon, y = str_rate, group = monthf)) + 
+  geom_line(aes(color = monthf)) + 
+  xlab("Polygon") + ylab("Stranding rate (ind./1000 km)")+ 
+  theme(legend.position = "right") +
+  theme(legend.title = element_blank()) + 
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(), 
+        panel.background = element_blank()) + 
+  theme(axis.text.x = element_text(size = 10),
+        axis.text.y = element_text(size = 10))+ 
+  theme(panel.border = element_rect(colour = "black", fill = NA))+ 
+  theme(axis.title.x = element_text(size = 10),
+        axis.title.y = element_text(size = 10))+
+  theme(strip.text.x = element_text(size = 18, face = "italic"))
+
+figure7
+```
+
+```{r}
+ker <- raster::stack("./data_out/kernelDensity.tif")
+ker <- cartomisc::gplot_data(ker)
+
+figure8 <- 
+  ggplot() +
+  geom_sf(data = brazil)+ 
+  geom_sf(data = sectorsPolygon_linesFinal)+
+  geom_tile(data = ker, 
+            aes(x = x, y = y, fill = value)) +
+  scale_fill_gradient("Density",
+                      low = 'white', high = 'red',
+                      na.value = NA) +
+  coord_sf(xlim = c(-50.5, -44), ylim = c(-28.5, -23))+ 
+  ylab("Latitude") + xlab("longitude") +
+  theme(
+    panel.background = element_rect(fill="lightblue"),
+    panel.grid.major = element_blank()) +
+  theme(axis.title = element_text(colour = "black", size = 20), 
+        axis.text = element_text(colour = "black", size = 16), 
+        axis.line = element_line(colour = "black"),
+        legend.text = element_text(colour = "black", size = 12),
+        legend.title = element_text(colour = "black", size = 14)) + 
+  annotation_scale(location = "br", width_hint = 0.3,
+                   text_cex = 1.3,height = unit(0.3, "cm"),
+                   pad_x = unit(0.1, "in"), pad_y = unit(0.05, "in")) + 
+  annotation_north_arrow(location = "br", which_north = "true", 
+                         pad_x = unit(0.10, "in"), pad_y = unit(0.2, "in"),
+                         style = north_arrow_fancy_orienteering,
+                         height = unit(3, "cm"),width = unit(3, "cm")) + 
+  annotate(geom = "text", x = -46, y = -26, label = "Atlantic Ocean", 
+           color = "grey22", size = 8) + 
+  annotate(geom = "text", x = -47.5, y = -23.20, label = "São Paulo", 
+           color = "grey22", size = 8) + 
+  annotate(geom = "text", x = -49.8, y = -25, label = "Paraná", 
+           color = "grey22", size = 8) + 
+  annotate(geom = "text", x = -49.8, y = -27.3, label = "Santa Catarina", 
+           color = "grey22", size = 8)
+
+figure8
+
+```
+
+
+
+```{r}
+
+kerSeason <- raster::stack("./data_out/kernelDensitySeasons.tif")
+
+kwinter <- raster::subset(kerSeason,1)
+kwinter <- cartomisc::gplot_data(kwinter)
+
+kspring <- raster::subset(kerSeason,2)
+kspring <- cartomisc::gplot_data(kspring)
+
+ksummer <- raster::subset(kerSeason,3)
+ksummer <- cartomisc::gplot_data(ksummer)
+
+kautumn <- raster::subset(kerSeason,4)
+kautumn <- cartomisc::gplot_data(kautumn)
+
+figure9A <- 
+  ggplot2::ggplot() +
+  geom_sf(data = brazil)+ 
+  geom_sf(data = sectorsPolygon_linesFinal)+
+  geom_tile(data = kwinter, 
+            aes(x = x, y = y, fill = value)) +
+  scale_fill_gradient("winter",
+                      low = 'white', high = 'red',
+                      na.value = NA) +
+  coord_sf(xlim = c(-50.5, -44), ylim = c(-28.5, -23))+ 
+  theme(
+    panel.background = element_rect(fill="lightblue"),
+    panel.grid.major = element_blank()) +
+  theme(axis.title = element_blank(), 
+        axis.text = element_text(colour = "black", size = 12), 
+        axis.line = element_line(colour = "black"),
+        legend.text = element_text(colour = "black", size = 12),
+        legend.title = element_text(colour = "black", size = 14)) + 
+  annotate(geom = "text", x = -46, y = -26, label = "", 
+           color = "grey22", size = 4) + 
+  annotate(geom = "text", x = -47.5,y = -23.20, label = "São Paulo", 
+           color = "grey22", size = 4) + 
+  annotate(geom = "text", x = -49.8, y = -25, label = "Paraná", 
+           color = "grey22", size = 4) + 
+  annotate(geom = "text", x = -49.8, y = -27.3, label = "Santa Catarina", 
+           color = "grey22", size = 4)
+
+figure9B <- 
+  ggplot() +
+  geom_sf(data = brazil)+ 
+  geom_sf(data = sectorsPolygon_linesFinal)+
+  geom_tile(data = kspring, 
+            aes(x = x, y = y, fill = value)) +
+  scale_fill_gradient("spring",
+                      low = 'white', high = 'red',
+                      na.value = NA) +
+  coord_sf(xlim = c(-50.5, -44), ylim = c(-28.5, -23))+ 
+  theme(
+    panel.background = element_rect(fill="lightblue"),
+    panel.grid.major = element_blank()) +
+  theme(axis.title = element_blank(), 
+        axis.text = element_text(colour = "black", size = 12), 
+        axis.line = element_line(colour = "black"),
+        legend.text = element_text(colour = "black", size = 12),
+        legend.title = element_text(colour = "black", size = 14)) + 
+  annotate(geom = "text", x = -46, y = -26, label = "", 
+           color = "grey22", size = 4) + 
+  annotate(geom = "text", x = -47.5, y = -23.20, label = "São Paulo", 
+           color = "grey22", size = 4) + 
+  annotate(geom = "text", x = -49.8, y = -25, label = "Paraná", 
+           color = "grey22", size = 4) + 
+  annotate(geom = "text", x = -49.8, y = -27.3, label = "Santa Catarina", 
+           color = "grey22", size = 4)
+
+figure9C <- 
+  ggplot() +
+  geom_sf(data = brazil)+ 
+  geom_sf(data = sectorsPolygon_linesFinal)+
+  geom_tile(data = ksummer, 
+            aes(x = x, y = y, fill = value)) +
+  scale_fill_gradient("summer",
+                      low = 'white', high = 'red',
+                      na.value = NA) +
+  coord_sf(xlim = c(-50.5, -44), ylim = c(-28.5, -23))+ 
+  theme(
+    panel.background = element_rect(fill="lightblue"),
+    panel.grid.major = element_blank()) +
+  theme(axis.title = element_blank(), 
+        axis.text = element_text(colour = "black", size = 12), 
+        axis.line = element_line(colour = "black"),
+        legend.text = element_text(colour = "black", size = 12),
+        legend.title = element_text(colour = "black", size = 14)) + 
+  annotate(geom = "text", x = -46, y = -26, label = "", 
+           color = "grey22", size = 4) + 
+  annotate(geom = "text", x = -47.5, y = -23.20, label = "São Paulo", 
+           color = "grey22", size = 4) + 
+  annotate(geom = "text", x = -49.8, y = -25, label = "Paraná", 
+           color = "grey22", size = 4) + 
+  annotate(geom = "text", x = -49.8, y = -27.3, label = "Santa Catarina", 
+           color = "grey22", size = 4)
+
+figure9D <- 
+  ggplot() +
+  geom_sf(data = brazil)+ 
+  geom_sf(data = sectorsPolygon_linesFinal)+
+  geom_tile(data = kautumn, 
+            aes(x = x, y = y, fill = value)) +
+  scale_fill_gradient("autumn",
+                      low = 'white', high = 'red',
+                      na.value = NA) +
+  coord_sf(xlim = c(-50.5, -44), ylim = c(-28.5, -23))+ 
+  theme(
+    panel.background = element_rect(fill="lightblue"),
+    panel.grid.major = element_blank()) +
+  theme(axis.title = element_blank(), 
+        axis.text = element_text(colour = "black", size = 12), 
+        axis.line = element_line(colour = "black"),
+        legend.text = element_text(colour = "black", size = 12),
+        legend.title = element_text(colour = "black", size = 14)) + 
+  annotate(geom = "text", x = -46, y = -26, label = "", 
+           color = "grey22", size = 4) + 
+  annotate(geom = "text", x = -47.5, y = -23.20, label = "São Paulo", 
+           color = "grey22", size = 4) + 
+  annotate(geom = "text", x = -49.8, y = -25, label = "Paraná", 
+           color = "grey22", size = 4) + 
+  annotate(geom = "text", x = -49.8, y = -27.3, label = "Santa Catarina", 
+           color = "grey22", size = 4)
+
+figure9 <- 
+  gridExtra::grid.arrange(figure9A,figure9B,figure9C,figure9D,ncol = 2,
+                          left="Latitude", bottom="Longitude")
+
+
+```
+
+
+
+
+
+
+```{r}
+pontoporiaVSfishing_plot <- 
+  ggplot2::qplot(x = cumulative_fishing_effort, y = str_rate, color = semester,
+                 data = pontoporiaVSfishing, geom = "point") +
+  xlab("Fihing effort") + ylab("Stranding rate (ind./1000 km)") +
+  theme(legend.position = "right") +
+  theme(legend.title = element_text(size = 14),
+        legend.text = element_text(size=12)) + 
+  scale_colour_discrete(name="Semester")+
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(), 
+        panel.background = element_blank()) + 
+  theme(axis.text.x = element_text(size = 10),
+        axis.text.y = element_text(size = 10),)+ 
+  theme(panel.border = element_rect(colour = "black", fill = NA))+ 
+  theme(axis.title.x = element_text(size = 10),
+        axis.title.y = element_text(size = 10))+
+  theme(strip.text.x = element_text(size = 18, face = "italic")) +
+  scale_x_continuous(labels = function(x) format(x, scientific = TRUE))
+
+pontoporiaVSfishingTotal_plot <- 
+  ggplot2::qplot(x = cumulative_fishing_effort, y = str_rate,
+                 data = pontoporiaVSfishingTotal, geom = "point") +
+  geom_point(colour="grey60") +
+  xlab("Fihing effort") + ylab("Stranding rate (ind./1000 km)")+
+  geom_text(aes(label=id_polygon), size=4, hjust=-0.5) +
+  theme(legend.position = "right") +
+  theme(legend.title = element_text(size = 14),
+        legend.text = element_text(size=12)) +
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(), 
+        panel.background = element_blank()) + 
+  theme(axis.text.x = element_text(size = 10),
+        axis.text.y = element_text(size = 10))+ 
+  theme(panel.border = element_rect(colour = "black", fill = NA))+ 
+  theme(axis.title.x = element_text(size = 10),
+        axis.title.y = element_text(size = 10))+
+  theme(strip.text.x = element_text(size = 18, face = "italic"))+
+  stat_smooth(method=loess) +
+  scale_x_continuous(labels = function(x) format(x, scientific = TRUE))
+
+figure11 <- 
+  gridExtra::grid.arrange(pontoporiaVSfishing_plot,
+                          pontoporiaVSfishingTotal_plot,ncol = 1)
+
+```
+
+
+## 5.2 Modelo de regressão
+
+## 5.3 Modelo oceanográfico de deriva
+

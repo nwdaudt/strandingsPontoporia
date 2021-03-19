@@ -7,3 +7,5 @@
 .pdf
 .shp
 .qgz
+era5_files
+*.Rproj

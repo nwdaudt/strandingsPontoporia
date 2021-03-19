@@ -37,7 +37,7 @@ library(raster)
 
 ## Open stranding dataset
 pontoporia <- as.data.frame(
-  readxl::read_xlsx("./data/Pontoporia PMP 2015_08_24 a 2020_06_11 SC_PR_SP_RJ.xlsx", 
+  readxl::read_xlsx("./data/Pontoporia_PMP_2015_08_24_a_2020_06_11 SC_PR_SP_RJ.xlsx", 
                     sheet = 2))
 
 ## Filter columns
@@ -195,7 +195,7 @@ pontoporia <-
 
 # Open shapefiles (shp) of beach monitoring lines
 # Create a list with all subdirectories containing the shp
-ff <- as.list(list.files(path = ".", pattern = "linha.shp$", 
+ff <- as.list(list.files(path = "./data", pattern = "linha.shp$", 
                          recursive = TRUE, full.names = TRUE))
 
 # Function to open the shp in subdirectories
@@ -897,6 +897,61 @@ ponSeasonFinal <-
 # write.csv2(ponFortnightFinal,"./data_out/ponFortnightFinal.csv")
 # write.csv2(ponMonthFinal,"./data_out/ponMonthFinal.csv")
 # write.csv2(ponSeasonFinal,"./data_out/ponSeasonFinal.csv")
+
+##----------------------------------------------------------------------------##
+##                Create fake stranding in the middle                         ##
+##                        of each polygon                                     ##
+##                    using ponFortnightFinal                                 ##
+##----------------------------------------------------------------------------##
+
+
+## Task 02: find start and end date of fortnight: ####
+empty_fortnight <- read.csv("./data/ponFortnightFinal.csv", sep = ";") %>%
+  filter(y==0)
+
+## to select fortnight
+filter_dates <- pontoporia %>% dplyr::select(contains(c("year", "month", "fortnight_id"))) %>%
+  group_by(year_n, year, month) %>% distinct(fortnight_id)
+
+empty_fortnight = empty_fortnight %>% 
+  mutate(day_start = (ifelse(fortnight_id%%2 == 0, "16", "1"))) %>%
+  mutate(day_end = (ifelse(fortnight_id%%2 == 0, "30", "15"))) %>%
+  left_join(., filter_dates,  by = c("year_n", "fortnight_id"), suffix(".y") ) %>%
+  mutate(day_end = (ifelse(month == 2, "28", day_end))) %>% 
+  mutate(date = lubridate::ymd(paste(year,month,day_start, sep = "-"))) %>%
+  mutate(back_date = lubridate::ymd(paste(year, month,day_end, sep = "-"))) %>%
+  dplyr::select(!starts_with(c("month", "day_"))) %>% dplyr::select(!ends_with("year")) %>% rename(id=X)
+
+# to do: rename X with id
+
+## Task 3: find middle point of coastline ("fake stranding") for each polygon sector and merge with task 2: ####
+
+# Open coastline, segment it using sectors and cast to linestring:
+coastline <- 
+  sf::st_intersection(st_read("./data/coastline_S_SE/lc_ilhas_tratada_UTM.shp"), sf::st_transform(sectorsPolygon, crs = 31982)) %>%
+  st_cast("MULTILINESTRING") %>% st_cast("LINESTRING", group_or_split = TRUE)
+
+# calculate the length and select the longest stripe of coastline along each
+# polygon sector and extract its middle point:
+coastline_middle_pt <- coastline %>% 
+  mutate(new_length = st_length(.)) %>%
+  mutate(new_length = as.numeric(new_length)) %>% 
+  group_by(id_polygon) %>% filter(new_length == max(new_length))
+# extract middle point:
+coastline_middle_pt <-  st_as_sf(SpatialLinesMidPoints(as(coastline_middle_pt, "Spatial")))
+
+# extract lat, long column
+coastline_middle_pt = coastline_middle_pt %>%
+  mutate(long = st_coordinates(st_transform(coastline_middle_pt, 4326))[,1]) %>%
+  mutate(lat = st_coordinates(st_transform(coastline_middle_pt, 4326))[,2])
+
+# join
+empty_fortnight_download <- left_join(empty_fortnight, (coastline_middle_pt %>% dplyr::select(contains(c("lat", "lon", "id_poly")))))
+empty_fortnight_download$zone <- "2"
+
+# viz:
+# mapview(coastline_middle_pt) + coastline
+
 
 ## Clean environment
 rm(list = "ponWeek", "effWeek", "ponWeekFinal", 
