@@ -26,6 +26,10 @@ library(ggspatial)
 library(janitor)
 library(KernSmooth)
 library(raster)
+library(maptools)
+
+# local functions: ##
+source("./functionEnvData.R")
 
 ################################################################################
 ############################## Dataset manipulation ############################
@@ -756,59 +760,30 @@ pontoporia <-
 ##----------------------------------------------------------------------------##
 
 ## The environmental data was collected from ERA5
-## through a Python routine files = {apiRequest.py} + {requirements.txt}
+## through a Python routine files = {download_and_process_era5_data.py} + {requirements.txt}
+## two different files are used in this step because the zone of 44 stranding 
+## was updated after reviewing the methodology during the the process of this 
+## consultancy. This step used source("./functionEnvData.R") to clean env data 
+## and merge with pontoporia df
 
-## Open environment variables dataset
-envVariables <- 
-  as.data.frame(read.csv("./data/environmental_data/envVariables.csv"))
+envVariables_old_zones <- processing_env_data(
+  env_file = "./data/environmental_data/envVariables_old_zone.csv")
+envVariables_new_zones <- processing_env_data(
+  env_file = "./data/environmental_data/envVariables_new_zone.csv"
+)
 
-## Remove id column
-envVariables <- envVariables %>% dplyr::select(-1)
+## Substitute the 44 strandings with old Zones (between lat -26/ -26.2) by the 
+## the new and correct data (downloaded using the new Zone) 
+envVariables <- rbind((envVariables_old_zones %>% filter(!(id_individual %in% 
+              envVariables_new_zones$id_individual))) , 
+              envVariables_new_zones)
 
-## Melt env variables
-envVariables_melt <- reshape2::melt(envVariables, id.vars = "fileName")
+## remove the two initial environmental dfs:
+rm(list = "envVariables_new_zones", "envVariables_old_zones")
 
-## Extract only the info of interest (numeric part)
-envVariables_melt <- 
-  envVariables_melt %>% 
-  dplyr::mutate(value = gsub("dtype=float32", "", value)) %>% 
-  dplyr::mutate(value = gsub("<xarray.Variable", "", value)) %>% 
-  dplyr::mutate(value = gsub("[^0-9.-]", "", value)) %>% 
-  dplyr::mutate(value = as.numeric(value)) %>% 
-  dplyr::mutate(fileName = gsub("WTUVP", "", fileName)) %>% 
-  dplyr::mutate(fileName = gsub(".nc", "", fileName))
+## save final environmental df:
+# write.csv(envVariables, "./data_out/strandingAndEnv.csv")
 
-## Return df to wide format
-envVariablesNew <- tidyr::pivot_wider(envVariables_melt, 
-                                      names_from = variable, 
-                                      values_from = value)
-
-## Set equal ID's prior to merge
-pontoporia$id_individual <- as.character(as.numeric(pontoporia$id_individual))
-envVariablesNew$fileName <- as.character(as.numeric(envVariablesNew$fileName))
-
-## Merge
-pontoporiaAndEnv <- merge(pontoporia, envVariablesNew, 
-                          by.x = "id_individual", by.y = "fileName")
-
-## Renaming Env columns
-pontoporia <- 
-  pontoporiaAndEnv %>% 
-  dplyr::rename(u_wind = u10mean,
-                u_wind_min = u10min,
-                u_wind_max = u10max,
-                v_wind = v10mean,
-                v_wind_min = v10min,
-                v_wind_max = v10max,
-                mean_wave_dir = mwdmean,
-                mean_wave_dir_max = mwdmax,
-                mean_wave_dir_min = mwdmin,
-                mean_wave_period = mwpmean,
-                mean_wave_period_min = mwpmin,
-                mean_wave_peiod_max = mwpmax,
-                sig_height_wind_wave = shwwmean,
-                sig_height_wind_wave_min = shwwmin,
-                sig_height_wind_wave_max = shwwmax)
 
 ##----------------------------------------------------------------------------##
 ##                Summarize by polygon, month, fortnight and week             ##
@@ -905,8 +880,8 @@ ponSeasonFinal <-
 ##----------------------------------------------------------------------------##
 
 
-## Task 02: find start and end date of fortnight: ####
-empty_fortnight <- read.csv("./data/ponFortnightFinal.csv", sep = ";") %>%
+## Task 01: find start and end date of fortnight: ####
+empty_fortnight <- read.csv("./data_out/ponFortnightFinal.csv", sep = ";") %>%
   filter(y==0)
 
 ## to select fortnight
@@ -920,11 +895,10 @@ empty_fortnight = empty_fortnight %>%
   mutate(day_end = (ifelse(month == 2, "28", day_end))) %>% 
   mutate(date = lubridate::ymd(paste(year,month,day_start, sep = "-"))) %>%
   mutate(back_date = lubridate::ymd(paste(year, month,day_end, sep = "-"))) %>%
-  dplyr::select(!starts_with(c("month", "day_"))) %>% dplyr::select(!ends_with("year")) %>% rename(id=X)
+  dplyr::select(!starts_with(c("month", "day_"))) %>% 
+  dplyr::select(!ends_with("year")) %>% dplyr::rename(id=X)
 
-# to do: rename X with id
-
-## Task 3: find middle point of coastline ("fake stranding") for each polygon sector and merge with task 2: ####
+## Task 2: find middle point of coastline ("fake stranding") for each polygon sector and merge with task 2: ####
 
 # Open coastline, segment it using sectors and cast to linestring:
 coastline <- 
@@ -937,8 +911,9 @@ coastline_middle_pt <- coastline %>%
   mutate(new_length = st_length(.)) %>%
   mutate(new_length = as.numeric(new_length)) %>% 
   group_by(id_polygon) %>% filter(new_length == max(new_length))
+
 # extract middle point:
-coastline_middle_pt <-  st_as_sf(SpatialLinesMidPoints(as(coastline_middle_pt, "Spatial")))
+coastline_middle_pt <-  st_as_sf(maptools::SpatialLinesMidPoints(as(coastline_middle_pt, "Spatial")))
 
 # extract lat, long column
 coastline_middle_pt = coastline_middle_pt %>%
@@ -951,14 +926,29 @@ empty_fortnight_download$zone <- "2"
 
 # viz:
 # mapview(coastline_middle_pt) + coastline
+# write.csv(empty_fortnight_download, "./data_out/empty_fortnight_download_era5.csv")
 
+## The "empty_fortnight_download_era5.csv" created in the step above was used as 
+## input in the download_and_process_era5_data.py script. And the output file generated after running
+## the code is called "envVariables_without_stranding_fortnight.csv" to be
+## used in the next session
 
 ## Clean environment
 rm(list = "ponWeek", "effWeek", "ponWeekFinal", 
    "ponFortnight", "effFortnight", "ponFortnightFinal", 
    "ponMonth", "effMonth", "ponMonthFinal",
    "ponSeason", "effSeason", "ponSeasonFinal",
-   "eff_i", "eff_c")
+   "eff_i", "eff_c", "empty_fortnight_download", "empty_fortnight")
+
+##----------------------------------------------------------------------------##
+##                    Process the env data downloaded for                     ##
+##                    "fake stranding" (session above) and                    ##
+##                  join it to the initial ponFortnightFinal df               ##
+##----------------------------------------------------------------------------##
+
+envVariables_empty_fortnight <- processing_env_data(
+  env_file = "./data/environmental_data/envVariables_without_stranding_fortnight.csv",
+  corresponding_df = read.csv2("./data_out/ponFortnightFinal.csv"), id_column = "X")
 
 ##----------------------------------------------------------------------------##
 ##                                Drift dataset                               ##

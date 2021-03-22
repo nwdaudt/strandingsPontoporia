@@ -1,0 +1,7 @@
+"","id","id_individual","state","beach","strech_name","strech_scheme","monitoring_type","date_hour","lat","long","cod_decomposition","sex","date","back_date","zone"
+"1",210,"000087","Santa Catarina","Pontal - Itapoa - 552 / Itapoa - 71","Pontal - Itapoa - 1","daily","call",2015-08-29 12:45:00,-26.084456,-48.60357,3,"unkwown",2015-08-29,2015-08-23,"3"
+"2",27855,"045293","Santa Catarina","Pontal - Itapoa - 552 / Itapoa - 71","Pontal - Itapoa - 1","daily","regular",2015-08-31 09:30:00,-26.1137,-48.60125,3,"male",2015-08-31,2015-08-25,"3"
+"3",3727,"003604","Santa Catarina","Pontal - Itapoa - 552 / Itapoa - 71","Pontal - Itapoa - 1","daily","regular",2015-08-31 10:21:00,-26.1137,-48.60125,3,"female",2015-08-31,2015-08-25,"3"
+"4",3454,"003331","Santa Catarina","Navegantes","Navegantes","daily","call",2015-09-01 13:46:00,-26.83313,-48.62743,2,"unkwown",2015-09-01,2015-08-31,"3"
+"5",7749,"007626","São Paulo","Peruíbe - Itanhaém","Aquário Peruíbe - Cibratel","daily","regular",2015-09-02 09:01:00,-24.21853,-46.84652,4,"unkwown",2015-09-02,2015-08-27,"2"
+"6",6366,"006243","Santa Catarina","Navegantes","Navegantes","daily","regular",2015-09-02 09:50:00,-26.8612,-48.63602,4,"unkwown",2015-09-02,2015-08-27,"3"
