@@ -27,6 +27,7 @@ library(janitor)
 library(KernSmooth)
 library(raster)
 library(maptools)
+library(rgdal)
 
 # local functions: ##
 source("./functionEnvData.R")
@@ -950,6 +951,9 @@ envVariables_empty_fortnight <- processing_env_data(
   env_file = "./data/environmental_data/envVariables_without_stranding_fortnight.csv",
   corresponding_df = read.csv2("./data_out/ponFortnightFinal.csv"), id_column = "X")
 
+# write csv:
+# write.csv(envVariables_empty_fortnight, "./data_out/no_strandingAndEnv_fortnight.csv")
+
 ##----------------------------------------------------------------------------##
 ##                                Drift dataset                               ##
 ##----------------------------------------------------------------------------##
@@ -1774,3 +1778,118 @@ pontoporiaVSfishing_plot <-
   ggplot2::qplot(x = cumulative_fishing_effort, y = n, color = semester,
                  data = pontoporiaVSfishing, geom = "point") +
   theme_bw()
+
+##----------------------------------------------------------------------------##
+##                   Make grids 40 X 40 Km and 30 X 30 km                     ##
+##----------------------------------------------------------------------------##
+
+study_area = st_read("./data/poligon_study_area_lim_isob50m.gpkg")
+
+## grid40km:
+
+grid40km = st_make_grid(study_area, cellsize = .4, square = T) %>% st_sf() %>% st_cast("POLYGON")
+grid20km = st_make_grid(study_area, cellsize = .2, square = T) %>% st_sf() %>% st_cast("POLYGON")
+
+####
+grid20km$n_row = seq.int(1:nrow(grid20km))
+grid40km$n_row = seq.int(1:nrow(grid40km))
+
+clip_area_40km_intersect = st_intersects(x = study_area, y = grid40km, byid=TRUE)
+clip_area_40km_intersect = subset(grid40km, n_row %in% clip_area_40km_intersect[[1]])
+
+clip_area_20km_intersect = st_intersects(x = clip_area_40km_intersect, y = grid20km, byid=TRUE)
+clip_area_20km_intersect = subset(grid20km, n_row %in% unlist(clip_area_20km_intersect))
+# Viz next step:
+mapview(st_centroid(clip_area_20km_intersect)) + st_centroid(clip_area_40km_intersect) + clip_area_40km_intersect
+
+###
+# centroids:
+centroid_sides = st_join(st_centroid(clip_area_20km_intersect), clip_area_40km_intersect) %>% 
+  filter(!is.na(n_row.y)) %>%
+  mutate(lat = unlist(map(.$geometry,1)),
+         long = unlist(map(.$geometry,2))) %>%
+  mutate(type = "sides")
+
+centroid_middle = st_join(st_centroid(clip_area_40km_intersect), clip_area_40km_intersect) %>% 
+  filter(!is.na(n_row.y)) %>%
+  mutate(lat = unlist(map(.$geometry,1)),
+         long = unlist(map(.$geometry,2))) %>% 
+  mutate(type= "centroid")
+
+# save final shape of points:
+points_40km <- st_intersection(rbind(centroid_middle, centroid_sides), study_area)
+mapview(points_40km, zcol = "n_row.x")
+
+# save the final 20 km and 40 km shapes of polygon:  
+polygon_40km<- clip_area_40km_intersect %>% 
+  dplyr::filter(n_row %in% filter(points_40km, type == "centroid")$n_row.y)
+
+polygon_20km <- clip_area_20km_intersect %>%
+  dplyr::filter(n_row %in% filter(points_40km, type == "sides")$n_row.x)
+
+
+# Visualize final 
+mapview(study_area) + polygon_20km + points_40km # + poligon_40km
+
+# Save final products:
+write.csv(points_40km, "./data_out/pts_grid40km")
+st_write(points_40km, "./data_out/pts_grid40km.gpkg")
+#
+st_write(polygon_40km, "./data_out/polygons_grid40km.gpkg")
+st_write(polygon_20km, "./data_out/polygons_grid20km.gpkg")
+
+
+## grid30km:
+
+grid30km = st_make_grid(study_area, cellsize = .3, square = T) %>% st_sf() %>% st_cast("POLYGON")
+grid15km = st_make_grid(study_area, cellsize = .15, square = T) %>% st_sf() %>% st_cast("POLYGON")
+
+####
+grid15km$n_row = seq.int(1:nrow(grid15km))
+grid30km$n_row = seq.int(1:nrow(grid30km))
+
+clip_area_30km_intersect = st_intersects(x = study_area, y = grid30km, byid=TRUE)
+clip_area_30km_intersect = subset(grid30km, n_row %in% clip_area_30km_intersect[[1]])
+
+clip_area_15km_intersect = st_intersects(x = clip_area_30km_intersect, y = grid15km, byid=TRUE)
+clip_area_15km_intersect = subset(grid15km, n_row %in% unlist(clip_area_15km_intersect))
+# Viz next step:
+mapview(st_centroid(clip_area_15km_intersect)) + st_centroid(clip_area_30km_intersect) + clip_area_30km_intersect
+
+###
+# centroids:
+centroid_sides = st_join(st_centroid(clip_area_15km_intersect), clip_area_30km_intersect) %>% 
+  filter(!is.na(n_row.y)) %>%
+  mutate(lat = unlist(map(.$geometry,1)),
+         long = unlist(map(.$geometry,2)),
+         type = "sides")
+
+centroid_middle = st_join(st_centroid(clip_area_30km_intersect), clip_area_30km_intersect) %>% 
+  filter(!is.na(n_row.y)) %>%
+  mutate(lat = unlist(map(.$geometry,1)),
+         long = unlist(map(.$geometry,2)),
+         type = "centroid")
+
+
+# save final shape of points:
+points_30km <- st_intersection(rbind(centroid_middle, centroid_sides), study_area)
+mapview(points_30km, zcol = "n_row.x")
+
+# save the final 20 km and 40 km shapes of polygon:  
+polygon_30km<- clip_area_30km_intersect %>% 
+  dplyr::filter(n_row %in% filter(points_30km, type == "centroid")$n_row.y)
+
+polygon_15km <- clip_area_15km_intersect %>%
+  dplyr::filter(n_row %in% filter(points_30km, type == "sides")$n_row.x)
+
+
+# Visualize final 
+mapview(study_area) + polygon_15km + points_30km # + poligon_30km
+
+# Save final products:
+write.csv(points_30km, "./data_out/pts_grid30km")
+st_write(points_30km, "./data_out/pts_grid30km.gpkg")
+#
+st_write(polygon_30km, "./data_out/polygons_grid30km.gpkg")
+st_write(polygon_15km, "./data_out/polygons_grid15km.gpkg")
+
